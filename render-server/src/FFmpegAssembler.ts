@@ -430,7 +430,11 @@ export class FFmpegAssembler {
       });
 
       // Mix all audio tracks together
-      const mixFilter = `[base]${mixInputs.join('')}amix=inputs=${events.length + 1}:duration=first:dropout_transition=0[out]`;
+      // amix normalizes by dividing volume by active input count, causing
+      // inconsistent TTS volumes. Compensate by boosting output volume by
+      // the number of inputs so that manually-set volumes are preserved.
+      const inputCount = events.length + 1;
+      const mixFilter = `[base]${mixInputs.join('')}amix=inputs=${inputCount}:duration=first:dropout_transition=0[mixed];[mixed]volume=${inputCount}[out]`;
       filterParts.push(mixFilter);
 
       command

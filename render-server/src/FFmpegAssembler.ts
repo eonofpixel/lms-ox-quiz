@@ -19,17 +19,21 @@ function isNvencAvailable(): boolean {
   if (_nvencAvailable !== null) return _nvencAvailable;
 
   try {
-    const output = execSync(`"${ffmpegInstaller.path}" -encoders 2>&1`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-    _nvencAvailable = output.includes('h264_nvenc');
-    console.log(
-      `NVENC encoder: ${_nvencAvailable ? 'AVAILABLE (GPU acceleration enabled)' : 'NOT AVAILABLE (using CPU encoding)'}`
+    // Actually try to encode a tiny test frame with NVENC
+    // This catches cases where ffmpeg lists h264_nvenc but can't use it
+    execSync(
+      `"${ffmpegInstaller.path}" -f lavfi -i color=black:s=64x64:d=0.1 -c:v h264_nvenc -preset p4 -f null - 2>&1`,
+      {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: 'pipe',
+      }
     );
+    _nvencAvailable = true;
+    console.log('NVENC encoder: AVAILABLE (GPU acceleration enabled - verified by test encode)');
   } catch {
     _nvencAvailable = false;
-    console.log('NVENC detection failed, using CPU encoding');
+    console.log('NVENC encoder: NOT AVAILABLE (test encode failed, using CPU encoding)');
   }
 
   return _nvencAvailable;

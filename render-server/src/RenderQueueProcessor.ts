@@ -60,7 +60,20 @@ export class RenderQueueProcessor {
     // Generate sound effects (cached)
     this.soundEffects = await this.soundEffectsGenerator.generateAll();
 
-    console.log('RenderQueueProcessor initialized with TTS and sound effects');
+    // NEW: Initialize browser here for reuse across jobs
+    await this.renderer.initialize();
+
+    // Log GPU encoder availability
+    const gpuAvailable = FFmpegAssembler.isGpuAvailable();
+    console.log(`GPU encoding: ${gpuAvailable ? 'ENABLED (NVENC)' : 'DISABLED (CPU fallback)'}`);
+
+    console.log('RenderQueueProcessor initialized with TTS, sound effects, and browser');
+  }
+
+  // NEW: Shutdown method
+  async shutdown(): Promise<void> {
+    await this.renderer.close();
+    console.log('RenderQueueProcessor shut down');
   }
 
   async addJob(input: RenderJobInput): Promise<string> {
@@ -137,23 +150,26 @@ export class RenderQueueProcessor {
       job.progress = 10;
       this.emitJobUpdate(job);
 
-      // Phase 2: Create full audio track (15%)
-      job.currentStep = '오디오 트랙 생성 중...';
+      // Phase 2+3: Audio mixing AND Frame capture IN PARALLEL
+      job.status = 'rendering';
+      job.currentStep = '오디오 믹싱 + 멀티워커 프레임 캡처 병렬 처리 중...';
       this.emitJobUpdate(job);
 
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const framesDir = path.join(tempDir, 'frames');
+
+      // Build audio events (same logic as before)
       const audioEvents: Array<{ audioPath: string; startMs: number; volume?: number }> = [];
 
-      // Add question TTS (boosted to compensate for amix normalization)
       const questionTTSEvent = audioTimeline.timeline.find(e => e.type === 'question_tts');
       if (questionTTSEvent && questionTTSEvent.audioPath) {
         audioEvents.push({
           audioPath: questionTTSEvent.audioPath,
           startMs: questionTTSEvent.startMs,
-          volume: 6.0,  // Boost to compensate for 9-input amix
+          volume: 6.0,
         });
       }
 
-      // Add timer tick-tock sounds (heavily boosted - 2x previous)
       const timerEvent = audioTimeline.timeline.find(e => e.type === 'timer');
       if (timerEvent && this.soundEffects) {
         const timerDurationSec = (timerEvent.endMs - timerEvent.startMs) / 1000;
@@ -162,98 +178,118 @@ export class RenderQueueProcessor {
           audioEvents.push({
             audioPath: isEven ? this.soundEffects.tick : this.soundEffects.tock,
             startMs: timerEvent.startMs + (i * 1000),
-            volume: 36.0,  // 2x previous (18 * 2)
+            volume: 36.0,
           });
         }
       }
 
-      // Add time up sound (heavily boosted - 2x previous)
       const answerRevealEvent = audioTimeline.timeline.find(e => e.type === 'answer_reveal');
       if (answerRevealEvent && this.soundEffects) {
         audioEvents.push({
           audioPath: this.soundEffects.timeUp,
           startMs: answerRevealEvent.startMs,
-          volume: 30.0,  // 2x previous (15 * 2)
+          volume: 30.0,
         });
       }
 
-      // Add explanation TTS (boosted to compensate for amix normalization)
       const explanationTTSEvent = audioTimeline.timeline.find(e => e.type === 'explanation_tts');
       if (explanationTTSEvent && explanationTTSEvent.audioPath) {
         audioEvents.push({
           audioPath: explanationTTSEvent.audioPath,
           startMs: explanationTTSEvent.startMs,
-          volume: 6.0,  // Boost to compensate for 9-input amix
+          volume: 6.0,
         });
       }
 
       const finalAudioPath = path.join(audioDir, 'final_audio.m4a');
-      await this.assembler.createAudioTimeline(
+
+      // RUN IN PARALLEL: audio mixing + frame capture (with browser crash recovery)
+      // Store promise and suppress unhandled rejection warning
+      let audioMixError: Error | undefined;
+      const audioMixingPromise = this.assembler.createAudioTimeline(
         audioEvents,
         audioTimeline.totalDurationMs,
         finalAudioPath
-      );
+      ).catch((err: Error) => {
+        audioMixError = err;
+      });
 
-      job.progress = 15;
+      let captureResult;
+      try {
+        captureResult = await this.renderer.captureSmartKeyframesParallel(
+          appUrl,
+          input.quizData,
+          input.settings,
+          audioTimeline,
+          framesDir,
+          (progress) => {
+            job.progress = 15 + Math.round(progress.percentage * 0.55);
+            job.currentStep = `프레임 캡처 중: ${progress.current}/${progress.total}`;
+            this.emitJobUpdate(job);
+          },
+          3
+        );
+      } catch (captureError) {
+        // Browser may have crashed - try to recover
+        console.warn('Frame capture failed, attempting browser recovery...', (captureError as Error).message);
+        try {
+          await this.renderer.close();
+        } catch {}
+        await this.renderer.initialize();
+        // Retry once
+        captureResult = await this.renderer.captureSmartKeyframesParallel(
+          appUrl,
+          input.quizData,
+          input.settings,
+          audioTimeline,
+          framesDir,
+          (progress) => {
+            job.progress = 15 + Math.round(progress.percentage * 0.55);
+            job.currentStep = `프레임 캡처 중 (재시도): ${progress.current}/${progress.total}`;
+            this.emitJobUpdate(job);
+          },
+          3
+        );
+      }
+
+      // Wait for audio mixing and check for errors
+      await audioMixingPromise;
+      if (audioMixError) {
+        throw new Error(`Audio mixing failed: ${audioMixError.message}`);
+      }
+
+      job.progress = 70;
       this.emitJobUpdate(job);
 
-      // Phase 3: Initialize renderer and record video in real-time (15% - 85%)
-      job.status = 'rendering';
-      job.currentStep = '렌더러 초기화 중...';
-      this.emitJobUpdate(job);
-
-      await this.renderer.initialize(input.settings.width, input.settings.height);
-
-      job.currentStep = '프레임 캡처 중...';
-      this.emitJobUpdate(job);
-
-      const appUrl = process.env.APP_URL || 'http://localhost:5173';
-      const framesDir = path.join(tempDir, 'frames');
-
-      // Capture frames with optimized method
-      const captureResult = await this.renderer.recordVideoOptimized(
-        appUrl,
-        input.quizData,
-        input.settings,
-        audioTimeline,
-        framesDir,
-        (progress) => {
-          job.progress = 15 + Math.round(progress.percentage * 0.55); // 15-70%
-          job.currentStep = `프레임 캡처 중: ${progress.current}/${progress.total}`;
-          this.emitJobUpdate(job);
-        }
-      );
-
-      // Phase 4: Encode video with audio (70% - 100%)
+      // Phase 4: Encode video with segments + audio (70-100%)
       job.status = 'encoding';
-      job.currentStep = '비디오 인코딩 중...';
+      job.currentStep = '비디오 인코딩 중 (GPU 가속 + 4K 업스케일)...';
       this.emitJobUpdate(job);
 
       const outputFileName = `${input.quizData.name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.mp4`;
       const outputPath = path.join(this.outputDir, outputFileName);
 
-      // Assemble frames with audio
-      await this.assembler.assembleVideo(
+      await this.assembler.assembleFromSegments(
+        captureResult.segments,
         {
-          framesDir: captureResult.framesDir,
-          framePattern: 'frame_%06d.jpg',
           fps: input.settings.fps,
-          width: input.settings.width,
-          height: input.settings.height,
+          captureWidth: captureResult.captureWidth,
+          captureHeight: captureResult.captureHeight,
+          outputWidth: input.settings.width,
+          outputHeight: input.settings.height,
           outputPath,
           audioPath: finalAudioPath,
         },
         (progress) => {
-          job.progress = 70 + Math.round(progress.percentage * 0.30); // 70-100%
+          job.progress = 70 + Math.round(progress.percentage * 0.30);
           job.currentStep = `비디오 인코딩 중: ${Math.round(progress.percentage)}%`;
           this.emitJobUpdate(job);
         }
       );
 
-      // Cleanup temp directory
+      // Cleanup
       await fs.remove(tempDir);
 
-      // Success
       job.status = 'completed';
       job.progress = 100;
       job.outputPath = outputPath;
@@ -268,13 +304,11 @@ export class RenderQueueProcessor {
       this.emitJobUpdate(job);
       console.error(`Job ${jobId} failed:`, error);
 
-      // Cleanup on error
       try {
         await fs.remove(tempDir);
       } catch {}
-    } finally {
-      await this.renderer.close();
     }
+    // NOTE: Do NOT close the browser here - it's reused across jobs
   }
 
   private emitJobUpdate(job: RenderJobStatus): void {

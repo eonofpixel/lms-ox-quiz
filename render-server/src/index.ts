@@ -3,7 +3,6 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import { RenderQueueProcessor } from './RenderQueueProcessor.js';
-import { PuppeteerRenderer } from './PuppeteerRenderer.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -127,5 +126,18 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown - close browser on exit
+async function gracefulShutdown(signal: string) {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  await renderQueue.shutdown();
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 export { app, io };

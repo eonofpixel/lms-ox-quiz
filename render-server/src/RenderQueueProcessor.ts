@@ -139,12 +139,28 @@ export class RenderQueueProcessor {
       this.emitJobUpdate(job);
 
       const questionText = quizItem.questionTTS || quizItem.question;
-      const explanationText = quizItem.explanationTTS || quizItem.explanation;
+
+      // 다중 해설 지원: explanations 배열이 있으면 사용, 없으면 단일 해설 사용
+      let firstExplanationText: string;
+      let additionalExplanations: Array<{ content: string; tts?: string }> | undefined;
+
+      if (quizItem.explanations && quizItem.explanations.length > 0) {
+        // 다중 해설 모드
+        const firstExp = quizItem.explanations[0];
+        firstExplanationText = firstExp.tts || firstExp.content;
+        if (quizItem.explanations.length > 1) {
+          additionalExplanations = quizItem.explanations.slice(1);
+        }
+      } else {
+        // 단일 해설 모드 (하위 호환성)
+        firstExplanationText = quizItem.explanationTTS || quizItem.explanation;
+      }
 
       const audioTimeline = await this.ttsService.generateQuizAudio(
         questionText,
-        explanationText,
-        audioDir
+        firstExplanationText,
+        audioDir,
+        additionalExplanations
       );
 
       job.progress = 10;
@@ -166,7 +182,7 @@ export class RenderQueueProcessor {
         audioEvents.push({
           audioPath: questionTTSEvent.audioPath,
           startMs: questionTTSEvent.startMs,
-          volume: 6.0,
+          volume: 4.2,
         });
       }
 
@@ -192,13 +208,16 @@ export class RenderQueueProcessor {
         });
       }
 
-      const explanationTTSEvent = audioTimeline.timeline.find(e => e.type === 'explanation_tts');
-      if (explanationTTSEvent && explanationTTSEvent.audioPath) {
-        audioEvents.push({
-          audioPath: explanationTTSEvent.audioPath,
-          startMs: explanationTTSEvent.startMs,
-          volume: 6.0,
-        });
+      // 모든 해설 TTS 이벤트 추가 (다중 해설 지원)
+      const explanationTTSEvents = audioTimeline.timeline.filter(e => e.type === 'explanation_tts');
+      for (const expEvent of explanationTTSEvents) {
+        if (expEvent.audioPath) {
+          audioEvents.push({
+            audioPath: expEvent.audioPath,
+            startMs: expEvent.startMs,
+            volume: 4.2,
+          });
+        }
       }
 
       const finalAudioPath = path.join(audioDir, 'final_audio.m4a');

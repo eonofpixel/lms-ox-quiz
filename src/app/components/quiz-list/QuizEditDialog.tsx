@@ -13,7 +13,8 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Button } from '../ui/button';
-import type { QuizItem } from '../../types/quiz';
+import { Plus, Trash2 } from 'lucide-react';
+import type { QuizItem, ExplanationItem } from '../../types/quiz';
 
 interface QuizEditDialogProps {
   open: boolean;
@@ -34,18 +35,59 @@ export function QuizEditDialog({
 }: QuizEditDialogProps) {
   const [quizName, setQuizName] = useState(defaultName);
   const [editingItem, setEditingItem] = useState<QuizItem>(defaultItem);
+  const [explanations, setExplanations] = useState<ExplanationItem[]>([]);
 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setQuizName(defaultName || `퀴즈 ${new Date().toLocaleDateString('ko-KR')}`);
-      setEditingItem({ ...defaultItem, id: defaultItem.id || uuidv4() });
+      const itemWithId = { ...defaultItem, id: defaultItem.id || uuidv4() };
+      setEditingItem(itemWithId);
+
+      // explanations 배열 초기화 (기존 데이터 마이그레이션)
+      if (defaultItem.explanations && defaultItem.explanations.length > 0) {
+        setExplanations([...defaultItem.explanations]);
+      } else {
+        // 기존 단일 해설을 배열로 변환
+        setExplanations([{
+          content: defaultItem.explanation || '',
+          tts: defaultItem.explanationTTS || '',
+        }]);
+      }
     }
   }, [open, defaultItem, defaultName]);
 
   const handleSave = () => {
     if (!quizName.trim()) return;
-    onSave(quizName.trim(), editingItem);
+    if (explanations.length === 0 || !explanations[0].content.trim()) return;
+
+    // 저장할 QuizItem 구성
+    const itemToSave: QuizItem = {
+      ...editingItem,
+      explanations: explanations.filter(e => e.content.trim()), // 빈 해설 제거
+      // 하위 호환성: 첫 번째 해설을 기존 필드에도 저장
+      explanation: explanations[0]?.content || '',
+      explanationTTS: explanations[0]?.tts || '',
+    };
+    onSave(quizName.trim(), itemToSave);
+  };
+
+  // 해설 추가
+  const handleAddExplanation = () => {
+    setExplanations([...explanations, { content: '', tts: '' }]);
+  };
+
+  // 해설 삭제
+  const handleRemoveExplanation = (index: number) => {
+    if (explanations.length <= 1) return; // 최소 1개 필수
+    setExplanations(explanations.filter((_, i) => i !== index));
+  };
+
+  // 해설 업데이트
+  const handleUpdateExplanation = (index: number, field: 'content' | 'tts', value: string) => {
+    const updated = [...explanations];
+    updated[index] = { ...updated[index], [field]: value };
+    setExplanations(updated);
   };
 
   return (
@@ -146,36 +188,80 @@ export function QuizEditDialog({
               </RadioGroup>
             </div>
 
-            {/* Explanation */}
-            <div className="space-y-2">
-              <Label htmlFor="explanation" className="text-base font-bold text-slate-800">
-                해설 내용
-              </Label>
-              <Textarea
-                id="explanation"
-                value={editingItem.explanation}
-                onChange={(e) =>
-                  setEditingItem({ ...editingItem, explanation: e.target.value })
-                }
-                placeholder="해설을 입력하세요"
-                className="min-h-[120px] resize-none text-base border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-xl p-4 leading-relaxed"
-              />
-            </div>
+            {/* Multiple Explanations */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-bold text-slate-800">
+                  해설 ({explanations.length}개)
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddExplanation}
+                  className="h-8 px-3 rounded-lg border-orange-300 text-orange-600 hover:bg-orange-50 hover:border-orange-400"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  해설 추가
+                </Button>
+              </div>
 
-            {/* Explanation TTS */}
-            <div className="space-y-2">
-              <Label htmlFor="explanationTTS" className="text-base font-bold text-slate-800">
-                해설 TTS 대본 (읽기 전용)
-              </Label>
-              <Textarea
-                id="explanationTTS"
-                value={editingItem.explanationTTS || editingItem.explanation}
-                onChange={(e) =>
-                  setEditingItem({ ...editingItem, explanationTTS: e.target.value })
-                }
-                placeholder="해설 음성으로 읽을 내용 (비워두면 해설 내용과 동일)"
-                className="h-20 text-base border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-xl resize-none"
-              />
+              {explanations.map((exp, index) => (
+                <div
+                  key={index}
+                  className="relative bg-white rounded-xl border border-slate-200 p-4 space-y-3"
+                >
+                  {/* 해설 번호 및 삭제 버튼 */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-md">
+                      해설 {index + 1}
+                    </span>
+                    {explanations.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveExplanation(index)}
+                        className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* 해설 내용 */}
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-slate-600">
+                      내용
+                    </Label>
+                    <Textarea
+                      value={exp.content}
+                      onChange={(e) => handleUpdateExplanation(index, 'content', e.target.value)}
+                      placeholder="해설 내용을 입력하세요"
+                      className="min-h-[80px] resize-none text-base border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-lg"
+                    />
+                  </div>
+
+                  {/* TTS 대본 */}
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-slate-600">
+                      TTS 대본 (선택)
+                    </Label>
+                    <Textarea
+                      value={exp.tts || ''}
+                      onChange={(e) => handleUpdateExplanation(index, 'tts', e.target.value)}
+                      placeholder="음성으로 읽을 내용 (비워두면 해설 내용과 동일)"
+                      className="h-16 resize-none text-sm border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {explanations.length === 0 && (
+                <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                  해설을 추가해주세요
+                </div>
+              )}
             </div>
           </div>
 

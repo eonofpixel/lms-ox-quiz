@@ -12,9 +12,14 @@ export interface TTSResult {
   durationMs: number;
 }
 
+export interface ExplanationTTSResult extends TTSResult {
+  index: number; // 해설 인덱스 (0부터 시작)
+}
+
 export interface AudioTimeline {
   questionTTS: TTSResult;
-  explanationTTS: TTSResult;
+  explanationTTS: TTSResult; // 하위 호환성: 첫 번째 해설
+  explanationTTSList?: ExplanationTTSResult[]; // 다중 해설 TTS 목록
   totalDurationMs: number;
   timeline: TimelineEvent[];
 }
@@ -24,6 +29,7 @@ export interface TimelineEvent {
   startMs: number;
   endMs: number;
   audioPath?: string;
+  explanationIndex?: number; // 다중 해설인 경우 해설 인덱스
 }
 
 export class TTSService {
@@ -128,7 +134,8 @@ export class TTSService {
   async generateQuizAudio(
     questionText: string,
     explanationText: string,
-    outputDir: string
+    outputDir: string,
+    additionalExplanations?: Array<{ content: string; tts?: string }>
   ): Promise<AudioTimeline> {
     await fs.ensureDir(outputDir);
 
@@ -159,20 +166,43 @@ export class TTSService {
     // Delay between TTS generations to avoid rate limiting
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    console.log('Generating explanation TTS...');
-    const explanationTTS = await this.generateTTS(
+    // 모든 해설 TTS 생성 (첫 번째 + 추가 해설)
+    const explanationTTSList: ExplanationTTSResult[] = [];
+
+    // 첫 번째 해설
+    console.log('Generating explanation TTS (1)...');
+    const firstExplanationTTS = await this.generateTTS(
       explanationText,
-      path.join(outputDir, 'explanation.mp3'),
+      path.join(outputDir, 'explanation_0.mp3'),
       3,
-      true // Use silent fallback if TTS fails
+      true
     );
+    explanationTTSList.push({ ...firstExplanationTTS, index: 0 });
+
+    // 추가 해설들
+    if (additionalExplanations && additionalExplanations.length > 0) {
+      for (let i = 0; i < additionalExplanations.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1500)); // 딜레이
+        const exp = additionalExplanations[i];
+        const text = exp.tts || exp.content;
+        console.log(`Generating explanation TTS (${i + 2})...`);
+        const ttsResult = await this.generateTTS(
+          text,
+          path.join(outputDir, `explanation_${i + 1}.mp3`),
+          3,
+          true
+        );
+        explanationTTSList.push({ ...ttsResult, index: i + 1 });
+      }
+    }
 
     // 타임라인 계산
-    // 인트로(2초) → 문제 TTS → 타이머(5초) → 정답공개(1초) → 해설 TTS
-    const introDuration = 2000;  // 3초 → 2초로 단축
+    // 인트로(2초) → 문제 TTS → 타이머(5초) → 정답공개(1초) → 해설 TTS들
+    const introDuration = 2000;
     const timerDuration = 5000;
     const answerRevealDuration = 1000;
-    const transitionBuffer = 300; // 화면 전환 버퍼 (1초 → 0.3초로 단축)
+    const transitionBuffer = 300;
+    const explanationTransitionBuffer = 800; // 해설 간 전환 버퍼
 
     const timeline: TimelineEvent[] = [
       {
@@ -196,21 +226,30 @@ export class TTSService {
         startMs: introDuration + transitionBuffer + questionTTS.durationMs + timerDuration,
         endMs: introDuration + transitionBuffer + questionTTS.durationMs + timerDuration + answerRevealDuration,
       },
-      {
-        type: 'explanation_tts',
-        startMs: introDuration + transitionBuffer + questionTTS.durationMs + timerDuration + answerRevealDuration + transitionBuffer,
-        endMs: introDuration + transitionBuffer + questionTTS.durationMs + timerDuration + answerRevealDuration + transitionBuffer + explanationTTS.durationMs,
-        audioPath: explanationTTS.audioPath,
-      },
     ];
+
+    // 해설 TTS 이벤트들 추가
+    let currentExplanationStart = introDuration + transitionBuffer + questionTTS.durationMs + timerDuration + answerRevealDuration + transitionBuffer;
+
+    for (const expTTS of explanationTTSList) {
+      timeline.push({
+        type: 'explanation_tts',
+        startMs: currentExplanationStart,
+        endMs: currentExplanationStart + expTTS.durationMs,
+        audioPath: expTTS.audioPath,
+        explanationIndex: expTTS.index,
+      });
+      currentExplanationStart += expTTS.durationMs + explanationTransitionBuffer;
+    }
 
     const totalDurationMs = timeline[timeline.length - 1].endMs + 1000; // 1초 여유
 
-    console.log(`Audio timeline generated: ${totalDurationMs}ms total`);
+    console.log(`Audio timeline generated: ${totalDurationMs}ms total (${explanationTTSList.length} explanations)`);
 
     return {
       questionTTS,
-      explanationTTS,
+      explanationTTS: firstExplanationTTS, // 하위 호환성
+      explanationTTSList,
       totalDurationMs,
       timeline,
     };

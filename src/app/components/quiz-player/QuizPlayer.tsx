@@ -8,6 +8,12 @@ import type { QuizItem as QuizItemType } from '../../types/quiz';
 import { Button } from '../ui/button';
 import { ArrowLeft } from 'lucide-react';
 
+// 다중 해설 아이템 인터페이스
+interface ExplanationItem {
+  content: string;
+  tts?: string;
+}
+
 // Legacy QuizItem interface for compatibility with existing components
 interface LegacyQuizItem {
   id: number;
@@ -16,6 +22,7 @@ interface LegacyQuizItem {
   answer: boolean;
   explanation: string;
   explanationTTS?: string;
+  explanations?: ExplanationItem[]; // 다중 해설 지원
 }
 
 // Convert new QuizItem to legacy format
@@ -27,6 +34,7 @@ function toLegacyQuizItem(item: QuizItemType, index: number): LegacyQuizItem {
     answer: item.answer,
     explanation: item.explanation,
     explanationTTS: item.explanationTTS,
+    explanations: item.explanations, // 다중 해설 전달
   };
 }
 

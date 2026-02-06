@@ -1,9 +1,18 @@
+// Explanation Item - 개별 해설 항목
+export interface ExplanationItem {
+  content: string;
+  tts?: string; // TTS 대본 (비워두면 content 사용)
+}
+
 // Quiz Item - 개별 퀴즈 문제
 export interface QuizItem {
   id: string;
   question: string;
   questionTTS?: string;
   answer: boolean; // true = O, false = X
+  // 다중 해설 지원 (신규)
+  explanations: ExplanationItem[];
+  // 하위 호환성을 위한 단일 해설 필드 (deprecated - explanations 사용 권장)
   explanation: string;
   explanationTTS?: string;
 }
@@ -23,6 +32,7 @@ export interface TTSAudioData {
   id: string;
   quizItemId: string;
   type: 'question' | 'explanation';
+  explanationIndex?: number; // 다중 해설인 경우 해설 인덱스 (0부터 시작)
   audioBlob: Blob;
   durationMs: number;
   createdAt: Date;
@@ -74,6 +84,15 @@ export interface ExcelQuizRow {
   explanation: string;
   questionTTS?: string;
   explanationTTS?: string;
+  // 추가 해설 (엑셀에서 explanation2, explanation3 등의 컬럼 지원)
+  additionalExplanations?: Array<{ content: string; tts?: string }>;
+}
+
+// 개별 해설 타임라인
+export interface ExplanationTimeline {
+  index: number;
+  startMs: number;
+  durationMs: number;
 }
 
 // Quiz Timeline - 퀴즈 타임라인 계산
@@ -86,8 +105,11 @@ export interface QuizTimeline {
   timerDurationMs: number;
   answerRevealStartMs: number;
   answerRevealDurationMs: number;
+  // 단일 해설 (하위 호환성)
   explanationTTSStartMs: number;
   explanationTTSDurationMs: number;
+  // 다중 해설 타임라인
+  explanationTimelines?: ExplanationTimeline[];
   totalDurationMs: number;
 }
 

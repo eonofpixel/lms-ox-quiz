@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Circle, X } from 'lucide-react';
 
+interface ExplanationItem {
+  content: string;
+  tts?: string;
+}
+
 interface Quiz {
   id: number;
   question: string;
@@ -9,6 +14,8 @@ interface Quiz {
   answer: boolean;
   explanation: string;
   explanationTTS?: string;
+  // 다중 해설 지원
+  explanations?: ExplanationItem[];
 }
 
 interface RenderTiming {
@@ -37,6 +44,23 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
   const [timeLeft, setTimeLeft] = useState(timerSeconds);
   const [isTimerActive, setIsTimerActive] = useState(false); // 초기값 false (TTS 완료 후 시작)
   const [tickTock, setTickTock] = useState(true); // 시계 소리 번갈아가며
+
+  // 다중 해설 관련 상태
+  const [currentExplanationIndex, setCurrentExplanationIndex] = useState(0);
+  const [isExplanationTransitioning, setIsExplanationTransitioning] = useState(false);
+
+  // 해설 목록 가져오기 (다중 해설 또는 단일 해설)
+  const getExplanations = (): ExplanationItem[] => {
+    if (quiz.explanations && quiz.explanations.length > 0) {
+      return quiz.explanations;
+    }
+    // 하위 호환성: 단일 해설을 배열로 변환
+    return [{ content: quiz.explanation, tts: quiz.explanationTTS }];
+  };
+
+  const explanations = getExplanations();
+  const currentExplanation = explanations[currentExplanationIndex] || explanations[0];
+  const hasMultipleExplanations = explanations.length > 1;
 
   // TTS 함수 (렌더링 모드에서는 시뮬레이션)
   const speak = (text: string, onEnd?: () => void, isQuestion: boolean = true) => {
@@ -181,6 +205,8 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
     setShowAnswer(false);
     setTimeLeft(timerSeconds); // 타이머 초기화
     setIsTimerActive(false); // TTS 완료 전까지 타이머 정지
+    setCurrentExplanationIndex(0); // 해설 인덱스 초기화
+    setIsExplanationTransitioning(false);
 
     // 질문 읽기
     // 화면 전환 후 1초 뒤 시작
@@ -201,6 +227,29 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
     };
   }, [quiz.id, quiz.question, quiz.questionTTS]);
 
+  // 다중 해설 순차 재생 함수
+  const playExplanationSequence = (startIndex: number = 0) => {
+    if (startIndex >= explanations.length) return;
+
+    setCurrentExplanationIndex(startIndex);
+    setIsExplanationTransitioning(false);
+
+    const explanation = explanations[startIndex];
+    const textToRead = explanation.tts || explanation.content;
+
+    speak(textToRead, () => {
+      // 현재 해설 TTS가 끝난 후
+      if (startIndex < explanations.length - 1) {
+        // 다음 해설이 있으면 전환 애니메이션 후 다음 해설로
+        setIsExplanationTransitioning(true);
+        setTimeout(() => {
+          playExplanationSequence(startIndex + 1);
+        }, 800); // 전환 딜레이
+      }
+      // 마지막 해설이면 그대로 끝
+    }, false);
+  };
+
   useEffect(() => {
     if (!isTimerActive) return;
 
@@ -220,40 +269,38 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
         onExplanationShown();
       }
       setIsTimerActive(false);
-      
-      // 해설 읽기 (1초 딜레이)
+
+      // 해설 순차 재생 시작 (1초 딜레이)
       setTimeout(() => {
-        const textToRead = quiz.explanationTTS || quiz.explanation;
-        speak(textToRead, undefined, false); // isQuestion = false
+        playExplanationSequence(0);
       }, 1000);
     }
-  }, [timeLeft, isTimerActive, quiz.answer, quiz.explanation, quiz.explanationTTS, timerSeconds]);
+  }, [timeLeft, isTimerActive, quiz.answer, timerSeconds]);
 
   const handleAnswerClick = (answer: boolean) => {
     if (showAnswer) return;
-    
+
     // 사용자가 답을 선택하면 즉시 타이머 중지 및 TTS 중단
     setIsTimerActive(false);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    
+
     setSelectedAnswer(answer);
-    
+
     // 바로 정답/오답 소리 재생
     const isCorrectAnswer = answer === quiz.answer;
     playAnswerSound(isCorrectAnswer);
-    
+
     // 선택 후 1초 뒤에 정답 표시
     setTimeout(() => {
       setShowAnswer(true);
       if (onExplanationShown) {
         onExplanationShown();
       }
-      // 해설 읽기 (1초 딜레이)
+      // 해설 순차 재생 시작 (1초 딜레이)
       setTimeout(() => {
-        const textToRead = quiz.explanationTTS || quiz.explanation;
-        speak(textToRead, undefined, false); // isQuestion = false
+        playExplanationSequence(0);
       }, 1000);
     }, 1000);
   };
@@ -307,10 +354,10 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative overflow-hidden border-b-4 border-orange-700/20"
+                className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20"
               >
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-                <h2 className="text-2xl md:text-3xl font-black leading-tight break-keep whitespace-pre-wrap text-slate-900 drop-shadow-sm">
+                <h2 className={`${quiz.question.length > 60 ? 'text-base md:text-lg' : quiz.question.length > 40 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
                   <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
                   {quiz.question}
                 </h2>
@@ -379,6 +426,11 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                 <div className="px-8 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3">
                    <div className="flex items-center gap-3">
                      <h3 className="text-2xl font-black text-slate-800">해설</h3>
+                     {hasMultipleExplanations && (
+                       <div className="px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                         {currentExplanationIndex + 1} / {explanations.length}
+                       </div>
+                     )}
                      <div className={`px-3 py-1 rounded-full text-sm font-bold ${isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {isCorrect ? '정답입니다' : '오답입니다'}
                      </div>
@@ -387,12 +439,12 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
 
                 {/* 내용 */}
                 <div className="p-8 bg-slate-200/50 flex flex-col items-center">
-                  
+
                   {/* 정답 표시 */}
                   <div className="mb-6 flex flex-col items-center gap-2">
                     <span className="text-slate-500 font-bold text-sm uppercase tracking-wide">Correct Answer</span>
-                    <div 
-                      className="relative cursor-default" 
+                    <div
+                      className="relative cursor-default"
                       onClick={onHome}
                     >
                       {quiz.answer ? (
@@ -405,8 +457,8 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                           <div className="absolute w-[8px] h-12 bg-blue-500 rounded-full -rotate-45" />
                         </div>
                       )}
-                      
-                      <motion.div 
+
+                      <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ delay: 0.3, type: "spring" }}
@@ -417,11 +469,39 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                     </div>
                   </div>
 
-                  <div className="bg-slate-300 rounded-xl p-6 text-center w-full mb-2">
-                    <p className="text-xl md:text-2xl text-slate-900 font-bold leading-relaxed break-keep whitespace-pre-wrap">
-                      {quiz.explanation}
-                    </p>
-                  </div>
+                  {/* 해설 내용 - 다중 해설 전환 애니메이션 */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentExplanationIndex}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: isExplanationTransitioning ? 0.5 : 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.4 }}
+                      className="bg-slate-300 rounded-xl p-6 text-center w-full mb-2"
+                    >
+                      <p className={`${currentExplanation.content.length > 60 ? 'text-base md:text-lg' : currentExplanation.content.length > 40 ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} text-slate-900 font-bold leading-relaxed break-all whitespace-pre-wrap`}>
+                        {currentExplanation.content}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+
+                  {/* 해설 인디케이터 (다중 해설인 경우) */}
+                  {hasMultipleExplanations && (
+                    <div className="flex gap-2 mt-2">
+                      {explanations.map((_, idx) => (
+                        <div
+                          key={idx}
+                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            idx === currentExplanationIndex
+                              ? 'bg-orange-500 w-4'
+                              : idx < currentExplanationIndex
+                              ? 'bg-orange-300'
+                              : 'bg-slate-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

@@ -2,11 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 
+// 다중 해설 아이템
+interface ExplanationItem {
+  content: string;
+  tts?: string;
+}
+
 // Timeline event types
 interface TimelineEvent {
   type: 'intro' | 'question_tts' | 'timer' | 'answer_reveal' | 'explanation_tts';
   startMs: number;
   endMs: number;
+  explanationIndex?: number; // 다중 해설 인덱스
 }
 
 interface QuizData {
@@ -15,6 +22,7 @@ interface QuizData {
   answer: boolean;
   explanation: string;
   explanationTTS?: string;
+  explanations?: ExplanationItem[]; // 다중 해설 지원
   timeline?: TimelineEvent[];
 }
 
@@ -25,6 +33,8 @@ interface RenderState {
   phase: Phase;
   timerValue: number; // seconds remaining for timer display
   timerProgress: number; // 0-1 progress for progress bar
+  currentExplanationIndex: number; // 현재 표시할 해설 인덱스
+  totalExplanations: number; // 전체 해설 개수
 }
 
 function calculateRenderState(currentTimeMs: number, timeline: TimelineEvent[]): RenderState {
@@ -32,7 +42,10 @@ function calculateRenderState(currentTimeMs: number, timeline: TimelineEvent[]):
   const questionEvent = timeline.find(e => e.type === 'question_tts');
   const timerEvent = timeline.find(e => e.type === 'timer');
   const answerEvent = timeline.find(e => e.type === 'answer_reveal');
-  const explanationEvent = timeline.find(e => e.type === 'explanation_tts');
+
+  // 모든 해설 이벤트 가져오기 (다중 해설 지원)
+  const explanationEvents = timeline.filter(e => e.type === 'explanation_tts');
+  const totalExplanations = Math.max(1, explanationEvents.length);
 
   // Default timings if not found
   const introEnd = introEvent?.endMs ?? 3000;
@@ -45,25 +58,38 @@ function calculateRenderState(currentTimeMs: number, timeline: TimelineEvent[]):
   const timerDurationSec = Math.ceil(timerDurationMs / 1000);
 
   if (currentTimeMs < introEnd) {
-    return { phase: 'intro', timerValue: timerDurationSec, timerProgress: 0 };
+    return { phase: 'intro', timerValue: timerDurationSec, timerProgress: 0, currentExplanationIndex: 0, totalExplanations };
   }
 
   if (currentTimeMs < timerStart) {
-    return { phase: 'question', timerValue: timerDurationSec, timerProgress: 0 };
+    return { phase: 'question', timerValue: timerDurationSec, timerProgress: 0, currentExplanationIndex: 0, totalExplanations };
   }
 
   if (currentTimeMs < timerEnd) {
     const elapsed = currentTimeMs - timerStart;
     const progress = elapsed / timerDurationMs;
     const remaining = Math.ceil((timerDurationMs - elapsed) / 1000);
-    return { phase: 'timer', timerValue: Math.max(0, remaining), timerProgress: progress };
+    return { phase: 'timer', timerValue: Math.max(0, remaining), timerProgress: progress, currentExplanationIndex: 0, totalExplanations };
   }
 
   if (currentTimeMs < answerEnd) {
-    return { phase: 'answer', timerValue: 0, timerProgress: 1 };
+    return { phase: 'answer', timerValue: 0, timerProgress: 1, currentExplanationIndex: 0, totalExplanations };
   }
 
-  return { phase: 'explanation', timerValue: 0, timerProgress: 1 };
+  // 해설 단계: 현재 어떤 해설을 표시할지 계산
+  let currentExplanationIndex = 0;
+  for (let i = 0; i < explanationEvents.length; i++) {
+    const event = explanationEvents[i];
+    if (currentTimeMs >= event.startMs && currentTimeMs < event.endMs) {
+      currentExplanationIndex = event.explanationIndex ?? i;
+      break;
+    } else if (currentTimeMs >= event.endMs) {
+      // 이 해설 이벤트가 끝났으면 다음 해설로 (마지막 해설이면 그대로 유지)
+      currentExplanationIndex = event.explanationIndex ?? i;
+    }
+  }
+
+  return { phase: 'explanation', timerValue: 0, timerProgress: 1, currentExplanationIndex, totalExplanations };
 }
 
 // Declare global window property for Puppeteer communication
@@ -93,6 +119,7 @@ export function RenderPlayer() {
           answer: parsed.answer === true || parsed.answer === 'true',
           explanation: parsed.explanation || '',
           explanationTTS: parsed.explanationTTS || parsed.explanation || '',
+          explanations: parsed.explanations || undefined, // 다중 해설 지원
           timeline: parsed.timeline,
         });
 
@@ -182,6 +209,9 @@ export function RenderPlayer() {
               question={quizData.question}
               answer={quizData.answer}
               explanation={quizData.explanation}
+              explanations={quizData.explanations}
+              currentExplanationIndex={renderState.currentExplanationIndex}
+              totalExplanations={renderState.totalExplanations}
             />
           ) : (
             <QuizScreenStatic
@@ -258,6 +288,13 @@ function IntroScreenStatic() {
   );
 }
 
+// Helper function for adaptive font sizing based on text length
+function getAdaptiveFontClass(text: string, baseClass: string, smallClass: string, tinyClass: string): string {
+  if (text.length > 60) return tinyClass;
+  if (text.length > 40) return smallClass;
+  return baseClass;
+}
+
 // Static Quiz Screen - no animations, controlled by time
 interface QuizScreenStaticProps {
   question: string;
@@ -298,9 +335,9 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
         </div>
 
         {/* Question card - matches preview */}
-        <div className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative overflow-hidden border-b-4 border-orange-700/20">
+        <div className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-          <h2 className="text-2xl md:text-3xl font-black leading-tight break-keep whitespace-pre-wrap text-slate-900 drop-shadow-sm">
+          <h2 className={`${getAdaptiveFontClass(question, 'text-2xl md:text-3xl', 'text-xl md:text-2xl', 'text-base md:text-lg')} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
             <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
             {question}
           </h2>
@@ -339,9 +376,17 @@ interface ExplanationScreenStaticProps {
   question: string;
   answer: boolean;
   explanation: string;
+  explanations?: ExplanationItem[];
+  currentExplanationIndex: number;
+  totalExplanations: number;
 }
 
-function ExplanationScreenStatic({ question, answer, explanation }: ExplanationScreenStaticProps) {
+function ExplanationScreenStatic({ question, answer, explanation, explanations, currentExplanationIndex, totalExplanations }: ExplanationScreenStaticProps) {
+  // 표시할 해설 내용 결정
+  const currentExplanation = explanations && explanations.length > 0
+    ? explanations[currentExplanationIndex]?.content || explanation
+    : explanation;
+  const hasMultipleExplanations = totalExplanations > 1;
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col items-center justify-center relative text-slate-900">
       {/* Matches preview max-w-4xl */}
@@ -351,6 +396,11 @@ function ExplanationScreenStatic({ question, answer, explanation }: ExplanationS
           <div className="px-8 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h3 className="text-2xl font-black text-slate-800">해설</h3>
+              {hasMultipleExplanations && (
+                <div className="px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                  {currentExplanationIndex + 1} / {totalExplanations}
+                </div>
+              )}
               <div className="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">
                 정답 공개
               </div>
@@ -378,10 +428,28 @@ function ExplanationScreenStatic({ question, answer, explanation }: ExplanationS
             </div>
 
             <div className="bg-slate-300 rounded-xl p-6 text-center w-full mb-2">
-              <p className="text-xl md:text-2xl text-slate-900 font-bold leading-relaxed break-keep whitespace-pre-wrap">
-                {explanation}
+              <p className={`${getAdaptiveFontClass(currentExplanation, 'text-xl md:text-2xl', 'text-lg md:text-xl', 'text-base md:text-lg')} text-slate-900 font-bold leading-relaxed break-keep whitespace-pre-wrap`}>
+                {currentExplanation}
               </p>
             </div>
+
+            {/* 해설 인디케이터 (다중 해설인 경우) */}
+            {hasMultipleExplanations && (
+              <div className="flex gap-2 mt-3">
+                {Array.from({ length: totalExplanations }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      idx === currentExplanationIndex
+                        ? 'bg-orange-500 w-4'
+                        : idx < currentExplanationIndex
+                        ? 'bg-orange-300'
+                        : 'bg-slate-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

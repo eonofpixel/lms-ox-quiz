@@ -16,6 +16,10 @@ const defaultQuizItem: QuizItem = {
   answer: true,
   explanation: '안전모, 안전화, 보안경 등 작업에 맞는 안전보호구 착용은 산업안전보건법에 명시된 필수 안전수칙입니다.',
   explanationTTS: '안전모, 안전화, 보안경 등 작업에 맞는 안전보호구 착용은 산업안전보건법에 명시된 필수 안전수칙입니다.',
+  explanations: [{
+    content: '안전모, 안전화, 보안경 등 작업에 맞는 안전보호구 착용은 산업안전보건법에 명시된 필수 안전수칙입니다.',
+    tts: '안전모, 안전화, 보안경 등 작업에 맞는 안전보호구 착용은 산업안전보건법에 명시된 필수 안전수칙입니다.',
+  }],
 };
 
 export function QuizListPage() {

@@ -86,7 +86,7 @@ interface WorkerBrowser {
 
 async function createWorker(captureWidth: number, captureHeight: number): Promise<WorkerBrowser> {
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -175,7 +175,7 @@ export class PuppeteerRenderer {
     console.log(`Launching Puppeteer browser (capture: ${captureWidth}x${captureHeight}, output: ${outputWidth}x${outputHeight})...`);
 
     this.browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

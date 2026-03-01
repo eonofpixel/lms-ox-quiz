@@ -127,9 +127,23 @@ export function QuizEditDialog({
           <div className="space-y-4 bg-orange-50/50 p-6 rounded-2xl border border-orange-100">
             {/* Question */}
             <div className="space-y-2">
-              <Label htmlFor="question" className="text-base font-bold text-slate-800">
-                질문 내용
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="question" className="text-base font-bold text-slate-800">
+                  질문 내용
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({ ...editingItem, singleLineQuestion: !editingItem.singleLineQuestion })}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                    editingItem.singleLineQuestion
+                      ? 'bg-orange-500 border-orange-600 text-white shadow-sm'
+                      : 'bg-white border-slate-300 text-slate-500 hover:border-orange-300 hover:text-orange-500'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${editingItem.singleLineQuestion ? 'bg-white' : 'bg-slate-300'}`} />
+                  1줄 고정
+                </button>
+              </div>
               <Textarea
                 id="question"
                 value={editingItem.question}

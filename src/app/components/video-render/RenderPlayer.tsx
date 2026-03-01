@@ -23,6 +23,7 @@ interface QuizData {
   explanation: string;
   explanationTTS?: string;
   explanations?: ExplanationItem[]; // 다중 해설 지원
+  singleLineQuestion?: boolean; // 질문 1줄 고정
   timeline?: TimelineEvent[];
 }
 
@@ -120,6 +121,7 @@ export function RenderPlayer() {
           explanation: parsed.explanation || '',
           explanationTTS: parsed.explanationTTS || parsed.explanation || '',
           explanations: parsed.explanations || undefined, // 다중 해설 지원
+          singleLineQuestion: parsed.singleLineQuestion === true, // 1줄 고정
           timeline: parsed.timeline,
         });
 
@@ -221,6 +223,7 @@ export function RenderPlayer() {
               timerDurationSec={timerDurationSec}
               showAnswer={renderState.phase === 'answer'}
               answer={quizData.answer}
+              singleLineQuestion={quizData.singleLineQuestion}
             />
           )}
         </div>
@@ -295,6 +298,22 @@ function getAdaptiveFontClass(text: string, baseClass: string, smallClass: strin
   return baseClass;
 }
 
+// Formula-based single-line font size for static renderer (base: 1280x720)
+// Card content width ≈ 1280 - 160 (outer padding p-10) - 64 (card padding p-8) - 60 (Q. prefix) ≈ 996px
+// Korean chars ≈ 0.55em wide at given font size
+function getSingleLineFontSizeStatic(text: string): number {
+  const availableWidth = 996; // px at base 1280px width
+  const charWidthRatio = 0.55; // em ratio per character (Korean avg)
+  const prefixWidth = 42; // approx px for "Q. " at given font
+  let fontSize = 30;
+  while (fontSize > 10) {
+    const estimatedTextWidth = (text.length * charWidthRatio * fontSize) + prefixWidth;
+    if (estimatedTextWidth <= availableWidth) break;
+    fontSize -= 1;
+  }
+  return fontSize;
+}
+
 // Static Quiz Screen - no animations, controlled by time
 interface QuizScreenStaticProps {
   question: string;
@@ -303,9 +322,10 @@ interface QuizScreenStaticProps {
   timerDurationSec: number;
   showAnswer: boolean;
   answer: boolean;
+  singleLineQuestion?: boolean;
 }
 
-function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSec, showAnswer, answer }: QuizScreenStaticProps) {
+function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSec, showAnswer, answer, singleLineQuestion }: QuizScreenStaticProps) {
   const isLowTime = timerValue <= 2;
 
   return (
@@ -337,10 +357,25 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
         {/* Question card - matches preview */}
         <div className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-          <h2 className={`${getAdaptiveFontClass(question, 'text-2xl md:text-3xl', 'text-xl md:text-2xl', 'text-base md:text-lg')} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
-            <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
-            {question}
-          </h2>
+          {singleLineQuestion ? (
+            <h2
+              className="font-black text-slate-900 drop-shadow-sm relative z-10 overflow-hidden"
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                fontSize: `${getSingleLineFontSizeStatic(question)}px`,
+                lineHeight: 1.3,
+              }}
+            >
+              <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+              {question}
+            </h2>
+          ) : (
+            <h2 className={`${getAdaptiveFontClass(question, 'text-2xl md:text-3xl', 'text-xl md:text-2xl', 'text-base md:text-lg')} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
+              <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+              {question}
+            </h2>
+          )}
         </div>
 
         {/* O/X buttons - matches preview */}

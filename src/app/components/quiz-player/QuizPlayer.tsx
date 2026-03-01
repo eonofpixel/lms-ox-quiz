@@ -23,6 +23,7 @@ interface LegacyQuizItem {
   explanation: string;
   explanationTTS?: string;
   explanations?: ExplanationItem[]; // 다중 해설 지원
+  singleLineQuestion?: boolean; // 질문 1줄 고정
 }
 
 // Convert new QuizItem to legacy format
@@ -35,6 +36,7 @@ function toLegacyQuizItem(item: QuizItemType, index: number): LegacyQuizItem {
     explanation: item.explanation,
     explanationTTS: item.explanationTTS,
     explanations: item.explanations, // 다중 해설 전달
+    singleLineQuestion: item.singleLineQuestion, // 1줄 고정 전달
   };
 }
 

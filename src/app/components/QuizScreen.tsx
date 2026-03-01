@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Circle, X } from 'lucide-react';
 
@@ -16,6 +16,8 @@ interface Quiz {
   explanationTTS?: string;
   // 다중 해설 지원
   explanations?: ExplanationItem[];
+  // 질문 1줄 고정
+  singleLineQuestion?: boolean;
 }
 
 interface RenderTiming {
@@ -311,6 +313,33 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
 
   const isCorrect = selectedAnswer === quiz.answer;
 
+  // 1줄 고정 자동 폰트 크기 계산
+  const questionContainerRef = useRef<HTMLDivElement>(null);
+  const questionTextRef = useRef<HTMLHeadingElement>(null);
+  const [singleLineFontSize, setSingleLineFontSize] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!quiz.singleLineQuestion) {
+      setSingleLineFontSize(null);
+      return;
+    }
+    const container = questionContainerRef.current;
+    const el = questionTextRef.current;
+    if (!container || !el) return;
+
+    // Reset to max size and measure
+    el.style.fontSize = '30px';
+    el.style.whiteSpace = 'nowrap';
+
+    const availableWidth = container.clientWidth - 64; // padding p-6 md:p-8 => ~48-64px total
+    let fontSize = 30;
+    while (el.scrollWidth > availableWidth && fontSize > 10) {
+      fontSize -= 1;
+      el.style.fontSize = `${fontSize}px`;
+    }
+    setSingleLineFontSize(fontSize);
+  }, [quiz.question, quiz.singleLineQuestion]);
+
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col relative text-slate-900">
       
@@ -352,15 +381,32 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
 
               {/* 질문 카드 */}
               <motion.div
+                ref={questionContainerRef}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20"
               >
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-                <h2 className={`${quiz.question.length > 60 ? 'text-base md:text-lg' : quiz.question.length > 40 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
-                  <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
-                  {quiz.question}
-                </h2>
+                {quiz.singleLineQuestion ? (
+                  <h2
+                    ref={questionTextRef}
+                    className="font-black text-slate-900 drop-shadow-sm relative z-10 overflow-hidden"
+                    style={{
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      fontSize: singleLineFontSize ? `${singleLineFontSize}px` : '30px',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+                    {quiz.question}
+                  </h2>
+                ) : (
+                  <h2 className={`${quiz.question.length > 60 ? 'text-base md:text-lg' : quiz.question.length > 40 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
+                    <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+                    {quiz.question}
+                  </h2>
+                )}
               </motion.div>
 
               {/* O/X 버튼 영역 */}

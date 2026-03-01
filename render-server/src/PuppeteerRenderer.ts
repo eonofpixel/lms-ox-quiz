@@ -28,6 +28,8 @@ export interface QuizData {
     answer: boolean;
     explanation: string;
     explanationTTS?: string;
+    explanations?: Array<{ content: string; tts?: string }>;
+    singleLineQuestion?: boolean;
   }>;
 }
 
@@ -247,10 +249,13 @@ export class PuppeteerRenderer {
       answer: quizItem.answer,
       explanation: quizItem.explanation,
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
+      explanations: quizItem.explanations,
+      singleLineQuestion: quizItem.singleLineQuestion,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
         endMs: event.endMs,
+        explanationIndex: event.explanationIndex,
       })),
     }));
 
@@ -499,10 +504,13 @@ export class PuppeteerRenderer {
       answer: quizItem.answer,
       explanation: quizItem.explanation,
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
+      explanations: quizItem.explanations,
+      singleLineQuestion: quizItem.singleLineQuestion,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
         endMs: event.endMs,
+        explanationIndex: event.explanationIndex,
       })),
     }));
 
@@ -848,10 +856,13 @@ export class PuppeteerRenderer {
       answer: quizItem.answer,
       explanation: quizItem.explanation,
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
+      explanations: quizItem.explanations,
+      singleLineQuestion: quizItem.singleLineQuestion,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
         endMs: event.endMs,
+        explanationIndex: event.explanationIndex,
       })),
     }));
 
@@ -965,10 +976,13 @@ export class PuppeteerRenderer {
       answer: quizItem.answer,
       explanation: quizItem.explanation,
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
+      explanations: quizItem.explanations,
+      singleLineQuestion: quizItem.singleLineQuestion,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
         endMs: event.endMs,
+        explanationIndex: event.explanationIndex,
       })),
     }));
 
@@ -1072,10 +1086,13 @@ export class PuppeteerRenderer {
       answer: quizItem.answer,
       explanation: quizItem.explanation,
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
+      explanations: quizItem.explanations,
+      singleLineQuestion: quizItem.singleLineQuestion,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
         endMs: event.endMs,
+        explanationIndex: event.explanationIndex,
       })),
     }));
 

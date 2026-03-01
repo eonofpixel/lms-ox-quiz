@@ -10,6 +10,7 @@ export interface QuizItem {
   question: string;
   questionTTS?: string;
   answer: boolean; // true = O, false = X
+  singleLineQuestion?: boolean; // 질문을 1줄로 고정 (자동 폰트 축소)
   // 다중 해설 지원 (신규)
   explanations: ExplanationItem[];
   // 하위 호환성을 위한 단일 해설 필드 (deprecated - explanations 사용 권장)

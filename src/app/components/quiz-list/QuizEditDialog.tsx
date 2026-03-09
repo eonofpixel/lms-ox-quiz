@@ -15,13 +15,16 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Button } from '../ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import type { QuizItem, ExplanationItem } from '../../types/quiz';
+import type { QuizThemeId } from '../../types/theme';
+import { QUIZ_THEME_LIST } from '../../types/theme';
 
 interface QuizEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultItem: QuizItem;
   defaultName?: string;
-  onSave: (name: string, item: QuizItem) => void;
+  defaultTheme?: QuizThemeId;
+  onSave: (name: string, item: QuizItem, theme: QuizThemeId) => void;
   mode: 'create' | 'edit';
 }
 
@@ -30,17 +33,20 @@ export function QuizEditDialog({
   onOpenChange,
   defaultItem,
   defaultName = '',
+  defaultTheme,
   onSave,
   mode,
 }: QuizEditDialogProps) {
   const [quizName, setQuizName] = useState(defaultName);
   const [editingItem, setEditingItem] = useState<QuizItem>(defaultItem);
   const [explanations, setExplanations] = useState<ExplanationItem[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState<QuizThemeId>(defaultTheme || 'classic');
 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setQuizName(defaultName || `퀴즈 ${new Date().toLocaleDateString('ko-KR')}`);
+      setSelectedTheme(defaultTheme || 'classic');
       const itemWithId = { ...defaultItem, id: defaultItem.id || uuidv4() };
       setEditingItem(itemWithId);
 
@@ -55,7 +61,7 @@ export function QuizEditDialog({
         }]);
       }
     }
-  }, [open, defaultItem, defaultName]);
+  }, [open, defaultItem, defaultName, defaultTheme]);
 
   const handleSave = () => {
     if (!quizName.trim()) return;
@@ -69,7 +75,7 @@ export function QuizEditDialog({
       explanation: explanations[0]?.content || '',
       explanationTTS: explanations[0]?.tts || '',
     };
-    onSave(quizName.trim(), itemToSave);
+    onSave(quizName.trim(), itemToSave, selectedTheme);
   };
 
   // 해설 추가
@@ -87,6 +93,13 @@ export function QuizEditDialog({
   const handleUpdateExplanation = (index: number, field: 'content' | 'tts', value: string) => {
     const updated = [...explanations];
     updated[index] = { ...updated[index], [field]: value };
+    setExplanations(updated);
+  };
+
+  // 해설 1줄 고정 토글
+  const handleToggleExplanationSingleLine = (index: number) => {
+    const updated = [...explanations];
+    updated[index] = { ...updated[index], singleLine: !updated[index].singleLine };
     setExplanations(updated);
   };
 
@@ -109,6 +122,36 @@ export function QuizEditDialog({
         </div>
 
         <div className="p-6 pt-4 space-y-6">
+          {/* 테마 선택 */}
+          <div className="space-y-2">
+            <Label className="text-base font-bold text-slate-800">테마 선택</Label>
+            <div className="flex gap-3">
+              {QUIZ_THEME_LIST.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => setSelectedTheme(theme.id)}
+                  className={`flex-1 rounded-xl border-2 p-3 transition-all ${
+                    selectedTheme === theme.id
+                      ? 'border-slate-900 shadow-lg scale-105'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex gap-1 mb-2 justify-center">
+                    {theme.previewColors.map((color, i) => (
+                      <div
+                        key={i}
+                        className="w-6 h-6 rounded-full border border-white shadow-sm"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-sm font-bold text-slate-700">{theme.name}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Quiz Name */}
           <div className="space-y-2">
             <Label htmlFor="quiz-name" className="text-base font-bold text-slate-800">
@@ -225,11 +268,25 @@ export function QuizEditDialog({
                   key={index}
                   className="relative bg-white rounded-xl border border-slate-200 p-4 space-y-3"
                 >
-                  {/* 해설 번호 및 삭제 버튼 */}
+                  {/* 해설 번호 및 옵션 버튼 */}
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-md">
-                      해설 {index + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-md">
+                        해설 {index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleExplanationSingleLine(index)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                          exp.singleLine
+                            ? 'bg-orange-500 border-orange-600 text-white shadow-sm'
+                            : 'bg-white border-slate-300 text-slate-500 hover:border-orange-300 hover:text-orange-500'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${exp.singleLine ? 'bg-white' : 'bg-slate-300'}`} />
+                        1줄 고정
+                      </button>
+                    </div>
                     {explanations.length > 1 && (
                       <Button
                         type="button"

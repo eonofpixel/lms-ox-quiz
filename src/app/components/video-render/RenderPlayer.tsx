@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
+import { getThemeColors, QuizThemeId } from '../../types/theme';
 
 // 다중 해설 아이템
 interface ExplanationItem {
   content: string;
   tts?: string;
+  singleLine?: boolean;
 }
 
 // Timeline event types
@@ -25,6 +27,7 @@ interface QuizData {
   explanations?: ExplanationItem[]; // 다중 해설 지원
   singleLineQuestion?: boolean; // 질문 1줄 고정
   timeline?: TimelineEvent[];
+  theme?: QuizThemeId;
 }
 
 // Determine current phase and state based on time
@@ -121,8 +124,9 @@ export function RenderPlayer() {
           explanation: parsed.explanation || '',
           explanationTTS: parsed.explanationTTS || parsed.explanation || '',
           explanations: parsed.explanations || undefined, // 다중 해설 지원
-          singleLineQuestion: parsed.singleLineQuestion === true, // 1줄 고정
+          singleLineQuestion: parsed.singleLineQuestion === true ? true : parsed.singleLineQuestion === false ? false : undefined, // 1줄 고정 (undefined = 자동 감지)
           timeline: parsed.timeline,
+          theme: parsed.theme || undefined,
         });
 
         if (parsed.timeline && Array.isArray(parsed.timeline)) {
@@ -178,18 +182,20 @@ export function RenderPlayer() {
     ? Math.ceil((timeline.find(e => e.type === 'timer')!.endMs - timeline.find(e => e.type === 'timer')!.startMs) / 1000)
     : 5;
 
+  const themeColors = getThemeColors(quizData?.theme);
+
   // Calculate scale factor based on viewport (base design is 1280x720)
   // For 4K (3840x2160): scale = 3, for 1080p (1920x1080): scale = 1.5
   const baseWidth = 1280;
   const baseHeight = 720;
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-gradient-to-br from-orange-100 via-amber-100 to-orange-50">
+    <div className={`w-screen h-screen overflow-hidden bg-gradient-to-br ${themeColors.backgroundGradient}`}>
       {/* Background gradient blobs - scaled for viewport */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-orange-300/30 rounded-full blur-[100px]" style={{ transform: 'scale(3)' }} />
-        <div className="absolute top-1/2 right-0 w-[500px] h-[500px] bg-amber-300/30 rounded-full blur-[100px]" style={{ transform: 'scale(3)' }} />
-        <div className="absolute -bottom-40 left-1/3 w-[700px] h-[700px] bg-orange-200/40 rounded-full blur-[120px]" style={{ transform: 'scale(3)' }} />
+        <div className={`absolute -top-20 -left-20 w-[600px] h-[600px] ${themeColors.backgroundBlobA} rounded-full blur-[100px]`} style={{ transform: 'scale(3)' }} />
+        <div className={`absolute top-1/2 right-0 w-[500px] h-[500px] ${themeColors.backgroundBlobB} rounded-full blur-[100px]`} style={{ transform: 'scale(3)' }} />
+        <div className={`absolute -bottom-40 left-1/3 w-[700px] h-[700px] ${themeColors.backgroundBlobC} rounded-full blur-[120px]`} style={{ transform: 'scale(3)' }} />
         <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px]" />
       </div>
 
@@ -205,7 +211,7 @@ export function RenderPlayer() {
           className="relative"
         >
           {renderState.phase === 'intro' ? (
-            <IntroScreenStatic />
+            <IntroScreenStatic themeId={quizData?.theme} />
           ) : renderState.phase === 'explanation' ? (
             <ExplanationScreenStatic
               question={quizData.question}
@@ -214,6 +220,7 @@ export function RenderPlayer() {
               explanations={quizData.explanations}
               currentExplanationIndex={renderState.currentExplanationIndex}
               totalExplanations={renderState.totalExplanations}
+              themeId={quizData?.theme}
             />
           ) : (
             <QuizScreenStatic
@@ -224,6 +231,7 @@ export function RenderPlayer() {
               showAnswer={renderState.phase === 'answer'}
               answer={quizData.answer}
               singleLineQuestion={quizData.singleLineQuestion}
+              themeId={quizData?.theme}
             />
           )}
         </div>
@@ -233,12 +241,13 @@ export function RenderPlayer() {
 }
 
 // Static Intro Screen - matches preview IntroScreen
-function IntroScreenStatic() {
+function IntroScreenStatic({ themeId }: { themeId?: QuizThemeId }) {
+  const themeColors = getThemeColors(themeId);
   return (
     <div className="w-full h-full p-8 md:p-12 flex flex-col items-center justify-between relative">
       {/* Top: Title area - matches preview */}
       <div className="text-center relative z-10 pt-8 flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 bg-orange-500 text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 border-orange-400">
+        <div className={`inline-flex items-center gap-2 ${themeColors.introBadgeBg} text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 ${themeColors.introBadgeBorder}`}>
           <span className="w-2 h-2 rounded-full bg-white" />
           <span className="text-sm md:text-base font-bold tracking-wider">SAFETY EDUCATION</span>
         </div>
@@ -262,7 +271,7 @@ function IntroScreenStatic() {
         </div>
 
         {/* VS badge */}
-        <div className="text-4xl md:text-6xl font-black text-orange-900/10 italic tracking-tighter">
+        <div className={`text-4xl md:text-6xl font-black ${themeColors.introVsColor} italic tracking-tighter`}>
           VS
         </div>
 
@@ -280,8 +289,8 @@ function IntroScreenStatic() {
 
       {/* Bottom: Start message - matches preview */}
       <div className="relative z-10 mb-8">
-        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur opacity-75" />
-        <div className="relative px-12 py-6 bg-orange-600 rounded-full leading-none flex items-center gap-4 shadow-xl">
+        <div className={`absolute -inset-1 bg-gradient-to-r ${themeColors.introStartGlow} rounded-full blur opacity-75`} />
+        <div className={`relative px-12 py-6 ${themeColors.introStartBg} rounded-full leading-none flex items-center gap-4 shadow-xl`}>
           <span className="text-xl md:text-2xl font-black text-white">
             잠시 후 퀴즈가 시작됩니다...
           </span>
@@ -303,12 +312,29 @@ function getAdaptiveFontClass(text: string, baseClass: string, smallClass: strin
 // Korean chars ≈ 0.55em wide at given font size
 function getSingleLineFontSizeStatic(text: string): number {
   const availableWidth = 996; // px at base 1280px width
-  const charWidthRatio = 0.55; // em ratio per character (Korean avg)
+  const charWidthRatio = 0.6; // em ratio per character (Korean avg)
   const prefixWidth = 42; // approx px for "Q. " at given font
   let fontSize = 30;
   while (fontSize > 10) {
     const estimatedTextWidth = (text.length * charWidthRatio * fontSize) + prefixWidth;
     if (estimatedTextWidth <= availableWidth) break;
+    fontSize -= 1;
+  }
+  return fontSize;
+}
+
+// 해설용 1줄 고정 폰트 크기 계산 (base: 1280x720)
+// 해설 영역: 전체 max-w-4xl 내부, p-8 + p-6 패딩 제외 → 약 780px
+function getExplanationSingleLineFontSize(text: string): number {
+  const availableWidth = 780;
+  // 한글 0.6, 영문/숫자/괄호 0.38 (font-bold 기준)
+  const koreanChars = text.replace(/[a-zA-Z0-9\s\(\)\.\-\/:,]/g, '').length;
+  const otherChars = text.length - koreanChars;
+  const estimateWidth = (fontSize: number) =>
+    (koreanChars * 0.6 + otherChars * 0.38) * fontSize;
+  let fontSize = 24;
+  while (fontSize > 14) {
+    if (estimateWidth(fontSize) <= availableWidth) break;
     fontSize -= 1;
   }
   return fontSize;
@@ -323,10 +349,16 @@ interface QuizScreenStaticProps {
   showAnswer: boolean;
   answer: boolean;
   singleLineQuestion?: boolean;
+  themeId?: QuizThemeId;
 }
 
-function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSec, showAnswer, answer, singleLineQuestion }: QuizScreenStaticProps) {
+function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSec, showAnswer, answer, singleLineQuestion, themeId }: QuizScreenStaticProps) {
   const isLowTime = timerValue <= 2;
+  const themeColors = getThemeColors(themeId);
+
+  // 질문 1줄 고정 자동 감지
+  const effectiveSingleLine = singleLineQuestion === true ||
+    (singleLineQuestion === undefined && getSingleLineFontSizeStatic(question) >= 20);
 
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col relative text-slate-900">
@@ -334,10 +366,10 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
         {/* Timer section - matches preview */}
         <div className="w-full max-w-3xl mx-auto mb-8">
           <div className="flex justify-between items-end mb-2">
-            <span className="text-orange-900 font-bold">Time Remaining</span>
+            <span className={`${themeColors.timerTextColor} font-bold`}>Time Remaining</span>
             <div className="flex items-center gap-2">
-              <Clock className={`w-6 h-6 ${isLowTime ? 'text-red-500' : 'text-orange-600'}`} />
-              <span className={`text-2xl font-mono font-black ${isLowTime ? 'text-red-500' : 'text-orange-900'}`}>
+              <Clock className={`w-6 h-6 ${isLowTime ? 'text-red-500' : themeColors.timerLabelColor}`} />
+              <span className={`text-2xl font-mono font-black ${isLowTime ? 'text-red-500' : themeColors.timerTextColor}`}>
                 00:{timerValue.toString().padStart(2, '0')}
               </span>
             </div>
@@ -347,7 +379,7 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
           <div className="h-4 bg-white/50 rounded-full overflow-hidden backdrop-blur-sm border border-white/20 shadow-inner">
             <div
               className={`h-full rounded-full shadow-md transition-none ${
-                isLowTime ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500'
+                isLowTime ? themeColors.progressBarUrgent : themeColors.progressBarNormal
               }`}
               style={{ width: `${timerProgress * 100}%` }}
             />
@@ -355,11 +387,11 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
         </div>
 
         {/* Question card - matches preview */}
-        <div className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20">
+        <div className={`w-full ${themeColors.questionCardBg} rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 ${themeColors.questionCardBorder}`}>
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-          {singleLineQuestion ? (
+          {effectiveSingleLine ? (
             <h2
-              className="font-black text-slate-900 drop-shadow-sm relative z-10 overflow-hidden"
+              className={`font-black ${themeColors.questionCardText} drop-shadow-sm relative z-10 overflow-hidden`}
               style={{
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -367,12 +399,12 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
                 lineHeight: 1.3,
               }}
             >
-              <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+              <span className={`inline-block mr-3 font-black ${themeColors.questionCardText} opacity-80`}>Q.</span>
               {question}
             </h2>
           ) : (
-            <h2 className={`${getAdaptiveFontClass(question, 'text-2xl md:text-3xl', 'text-xl md:text-2xl', 'text-base md:text-lg')} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
-              <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+            <h2 className={`${getAdaptiveFontClass(question, 'text-2xl md:text-3xl', 'text-xl md:text-2xl', 'text-base md:text-lg')} font-black leading-snug break-all whitespace-pre-wrap ${themeColors.questionCardText} drop-shadow-sm relative z-10`}>
+              <span className={`inline-block mr-3 font-black ${themeColors.questionCardText} opacity-80`}>Q.</span>
               {question}
             </h2>
           )}
@@ -414,13 +446,16 @@ interface ExplanationScreenStaticProps {
   explanations?: ExplanationItem[];
   currentExplanationIndex: number;
   totalExplanations: number;
+  themeId?: QuizThemeId;
 }
 
-function ExplanationScreenStatic({ question, answer, explanation, explanations, currentExplanationIndex, totalExplanations }: ExplanationScreenStaticProps) {
+function ExplanationScreenStatic({ question, answer, explanation, explanations, currentExplanationIndex, totalExplanations, themeId }: ExplanationScreenStaticProps) {
+  const themeColors = getThemeColors(themeId);
   // 표시할 해설 내용 결정
-  const currentExplanation = explanations && explanations.length > 0
-    ? explanations[currentExplanationIndex]?.content || explanation
-    : explanation;
+  const currentExpItem = explanations && explanations.length > 0
+    ? explanations[currentExplanationIndex] : null;
+  const currentExplanation = currentExpItem?.content || explanation;
+  const isSingleLineExplanation = currentExpItem?.singleLine === true;
   const hasMultipleExplanations = totalExplanations > 1;
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col items-center justify-center relative text-slate-900">
@@ -432,7 +467,7 @@ function ExplanationScreenStatic({ question, answer, explanation, explanations, 
             <div className="flex items-center gap-3">
               <h3 className="text-2xl font-black text-slate-800">해설</h3>
               {hasMultipleExplanations && (
-                <div className="px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                <div className={`px-3 py-1 rounded-full text-sm font-bold ${themeColors.explanationBadgeBg} ${themeColors.explanationBadgeText}`}>
                   {currentExplanationIndex + 1} / {totalExplanations}
                 </div>
               )}
@@ -463,9 +498,23 @@ function ExplanationScreenStatic({ question, answer, explanation, explanations, 
             </div>
 
             <div className="bg-slate-300 rounded-xl p-6 text-center w-full mb-2">
-              <p className={`${getAdaptiveFontClass(currentExplanation, 'text-xl md:text-2xl', 'text-lg md:text-xl', 'text-base md:text-lg')} text-slate-900 font-bold leading-relaxed break-keep whitespace-pre-wrap`}>
-                {currentExplanation}
-              </p>
+              {isSingleLineExplanation ? (
+                <p
+                  className="text-slate-900 font-bold leading-relaxed overflow-hidden"
+                  style={{
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    fontSize: `${getExplanationSingleLineFontSize(currentExplanation)}px`,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {currentExplanation}
+                </p>
+              ) : (
+                <p className={`${getAdaptiveFontClass(currentExplanation, 'text-xl md:text-2xl', 'text-lg md:text-xl', 'text-base md:text-lg')} text-slate-900 font-bold leading-relaxed break-keep whitespace-pre-wrap`}>
+                  {currentExplanation}
+                </p>
+              )}
             </div>
 
             {/* 해설 인디케이터 (다중 해설인 경우) */}
@@ -476,9 +525,9 @@ function ExplanationScreenStatic({ question, answer, explanation, explanations, 
                     key={idx}
                     className={`w-2 h-2 rounded-full transition-all duration-300 ${
                       idx === currentExplanationIndex
-                        ? 'bg-orange-500 w-4'
+                        ? `${themeColors.explanationIndicatorActive} w-4`
                         : idx < currentExplanationIndex
-                        ? 'bg-orange-300'
+                        ? themeColors.explanationIndicatorDone
                         : 'bg-slate-300'
                     }`}
                   />

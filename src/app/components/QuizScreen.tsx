@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Circle, X } from 'lucide-react';
+import { getThemeColors, QuizThemeId } from '../types/theme';
 
 interface ExplanationItem {
   content: string;
   tts?: string;
+  singleLine?: boolean;
 }
 
 interface Quiz {
@@ -35,9 +37,42 @@ interface QuizScreenProps {
   totalQuizzes: number;
   isRenderMode?: boolean; // 렌더링 모드 - TTS 대신 고정 타이밍 사용
   renderTiming?: RenderTiming; // 렌더링 모드에서 사용할 타이밍
+  themeId?: QuizThemeId;
 }
 
-export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNumber, totalQuizzes, isRenderMode = false, renderTiming }: QuizScreenProps) {
+// 해설 1줄 고정 폰트 크기 공식 추정 (DOM 측정 전 초기값/폴백)
+function estimateExplanationFontSize(text: string): number {
+  const availableWidth = 780;
+  const koreanChars = text.replace(/[a-zA-Z0-9\s\(\)\.\-\/:,]/g, '').length;
+  const otherChars = text.length - koreanChars;
+  const estimateWidth = (fontSize: number) =>
+    (koreanChars * 0.6 + otherChars * 0.38) * fontSize;
+  let fontSize = 24;
+  while (fontSize > 14) {
+    if (estimateWidth(fontSize) <= availableWidth) break;
+    fontSize -= 1;
+  }
+  return fontSize;
+}
+
+// 질문 1줄 고정 자동 감지 (길이 기반)
+// 텍스트가 적절한 폰트 크기(≥20px)로 1줄에 들어가면 자동 활성화
+function shouldAutoSingleLineQuestion(text: string): boolean {
+  const availableWidth = 996; // 1280px 기준 카드 내부 가용 너비
+  const charWidthRatio = 0.6; // 한글 기준 em 비율
+  const prefixWidth = 42; // "Q. " 접두사
+  const minAutoFont = 20;
+  let fontSize = 30;
+  while (fontSize >= minAutoFont) {
+    const estimated = (text.length * charWidthRatio * fontSize) + prefixWidth;
+    if (estimated <= availableWidth) return true;
+    fontSize -= 1;
+  }
+  return false;
+}
+
+export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNumber, totalQuizzes, isRenderMode = false, renderTiming, themeId }: QuizScreenProps) {
+  const themeColors = getThemeColors(themeId);
   const [selectedAnswer, setSelectedAnswer] = useState<boolean | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
 
@@ -313,13 +348,17 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
 
   const isCorrect = selectedAnswer === quiz.answer;
 
+  // 질문 1줄 고정 자동 감지: undefined = 길이 기반 자동, true = 강제 활성, false = 강제 비활성
+  const effectiveSingleLineQuestion = quiz.singleLineQuestion === true ||
+    (quiz.singleLineQuestion === undefined && shouldAutoSingleLineQuestion(quiz.question));
+
   // 1줄 고정 자동 폰트 크기 계산
   const questionContainerRef = useRef<HTMLDivElement>(null);
   const questionTextRef = useRef<HTMLHeadingElement>(null);
   const [singleLineFontSize, setSingleLineFontSize] = useState<number | null>(null);
 
   useLayoutEffect(() => {
-    if (!quiz.singleLineQuestion) {
+    if (!effectiveSingleLineQuestion) {
       setSingleLineFontSize(null);
       return;
     }
@@ -338,7 +377,33 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
       el.style.fontSize = `${fontSize}px`;
     }
     setSingleLineFontSize(fontSize);
-  }, [quiz.question, quiz.singleLineQuestion]);
+  }, [quiz.question, effectiveSingleLineQuestion]);
+
+  // 해설 1줄 고정 자동 폰트 크기 계산
+  const explanationContainerRef = useRef<HTMLDivElement>(null);
+  const explanationTextRef = useRef<HTMLParagraphElement>(null);
+  const [explanationFontSize, setExplanationFontSize] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!currentExplanation?.singleLine) {
+      setExplanationFontSize(null);
+      return;
+    }
+    const container = explanationContainerRef.current;
+    const el = explanationTextRef.current;
+    if (!container || !el) return;
+
+    el.style.fontSize = '24px';
+    el.style.whiteSpace = 'nowrap';
+
+    const availableWidth = container.clientWidth - 48; // padding p-6
+    let fontSize = 24;
+    while (el.scrollWidth > availableWidth && fontSize > 14) {
+      fontSize -= 1;
+      el.style.fontSize = `${fontSize}px`;
+    }
+    setExplanationFontSize(fontSize);
+  }, [currentExplanation?.content, currentExplanation?.singleLine, currentExplanationIndex, showAnswer]);
 
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col relative text-slate-900">
@@ -357,10 +422,10 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
               {/* 상단 타이머 및 진행바 (퀴즈 중에만 표시) */}
               <div className="w-full max-w-3xl mx-auto mb-8">
                 <div className="flex justify-between items-end mb-2">
-                  <span className="text-orange-900 font-bold">Time Remaining</span>
+                  <span className={`${themeColors.timerLabelColor} font-bold`}>Time Remaining</span>
                   <div className="flex items-center gap-2">
-                    <Clock className={`w-6 h-6 ${timeLeft <= 2 ? 'text-red-500 animate-pulse' : 'text-orange-600'}`} />
-                    <span className={`text-2xl font-mono font-black ${timeLeft <= 2 ? 'text-red-500' : 'text-orange-900'}`}>
+                    <Clock className={`w-6 h-6 ${timeLeft <= 2 ? 'text-red-500 animate-pulse' : themeColors.timerLabelColor}`} />
+                    <span className={`text-2xl font-mono font-black ${timeLeft <= 2 ? 'text-red-500' : themeColors.timerTextColor}`}>
                       00:{timeLeft.toString().padStart(2, '0')}
                     </span>
                   </div>
@@ -370,7 +435,7 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                 <div className="h-4 bg-white/50 rounded-full overflow-hidden backdrop-blur-sm border border-white/20 shadow-inner">
                   <motion.div
                     className={`h-full rounded-full shadow-md ${
-                      timeLeft <= 2 ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500'
+                      timeLeft <= 2 ? themeColors.progressBarUrgent : themeColors.progressBarNormal
                     }`}
                     initial={{ width: "0%" }}
                     animate={{ width: `${((5 - timeLeft) / 5) * 100}%` }}
@@ -384,13 +449,13 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                 ref={questionContainerRef}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full bg-orange-500 rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 border-orange-700/20"
+                className={`w-full ${themeColors.questionCardBg} rounded-2xl p-6 md:p-8 shadow-xl mb-10 text-center relative border-b-4 ${themeColors.questionCardBorder}`}
               >
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent" />
-                {quiz.singleLineQuestion ? (
+                {effectiveSingleLineQuestion ? (
                   <h2
                     ref={questionTextRef}
-                    className="font-black text-slate-900 drop-shadow-sm relative z-10 overflow-hidden"
+                    className={`font-black ${themeColors.questionCardText} drop-shadow-sm relative z-10 overflow-hidden`}
                     style={{
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -398,12 +463,12 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                       lineHeight: 1.3,
                     }}
                   >
-                    <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+                    <span className={`inline-block mr-3 font-black ${themeColors.questionCardText} opacity-80`}>Q.</span>
                     {quiz.question}
                   </h2>
                 ) : (
-                  <h2 className={`${quiz.question.length > 60 ? 'text-base md:text-lg' : quiz.question.length > 40 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black leading-snug break-all whitespace-pre-wrap text-slate-900 drop-shadow-sm relative z-10`}>
-                    <span className="inline-block mr-3 font-black text-slate-900 opacity-80">Q.</span>
+                  <h2 className={`${quiz.question.length > 60 ? 'text-base md:text-lg' : quiz.question.length > 40 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black leading-snug break-all whitespace-pre-wrap ${themeColors.questionCardText} drop-shadow-sm relative z-10`}>
+                    <span className={`inline-block mr-3 font-black ${themeColors.questionCardText} opacity-80`}>Q.</span>
                     {quiz.question}
                   </h2>
                 )}
@@ -473,7 +538,7 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                    <div className="flex items-center gap-3">
                      <h3 className="text-2xl font-black text-slate-800">해설</h3>
                      {hasMultipleExplanations && (
-                       <div className="px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                       <div className={`px-3 py-1 rounded-full text-sm font-bold ${themeColors.explanationBadgeBg} ${themeColors.explanationBadgeText}`}>
                          {currentExplanationIndex + 1} / {explanations.length}
                        </div>
                      )}
@@ -519,15 +584,33 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentExplanationIndex}
+                      ref={explanationContainerRef}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: isExplanationTransitioning ? 0.5 : 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ duration: 0.4 }}
                       className="bg-slate-300 rounded-xl p-6 text-center w-full mb-2"
                     >
-                      <p className={`${currentExplanation.content.length > 60 ? 'text-base md:text-lg' : currentExplanation.content.length > 40 ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} text-slate-900 font-bold leading-relaxed break-all whitespace-pre-wrap`}>
-                        {currentExplanation.content}
-                      </p>
+                      {currentExplanation.singleLine ? (
+                        <p
+                          ref={explanationTextRef}
+                          className="text-slate-900 font-bold leading-relaxed overflow-hidden"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            fontSize: explanationFontSize
+                              ? `${explanationFontSize}px`
+                              : `${estimateExplanationFontSize(currentExplanation.content)}px`,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {currentExplanation.content}
+                        </p>
+                      ) : (
+                        <p className={`${currentExplanation.content.length > 60 ? 'text-base md:text-lg' : currentExplanation.content.length > 40 ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} text-slate-900 font-bold leading-relaxed break-all whitespace-pre-wrap`}>
+                          {currentExplanation.content}
+                        </p>
+                      )}
                     </motion.div>
                   </AnimatePresence>
 
@@ -539,9 +622,9 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                           key={idx}
                           className={`w-2 h-2 rounded-full transition-all duration-300 ${
                             idx === currentExplanationIndex
-                              ? 'bg-orange-500 w-4'
+                              ? `${themeColors.explanationIndicatorActive} w-4`
                               : idx < currentExplanationIndex
-                              ? 'bg-orange-300'
+                              ? themeColors.explanationIndicatorDone
                               : 'bg-slate-300'
                           }`}
                         />

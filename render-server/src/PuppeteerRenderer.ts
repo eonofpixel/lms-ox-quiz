@@ -21,6 +21,7 @@ export interface RenderSettings {
 export interface QuizData {
   id: string;
   name: string;
+  theme?: string;
   items: Array<{
     id: string;
     question: string;
@@ -251,6 +252,7 @@ export class PuppeteerRenderer {
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
+      theme: quizData.theme,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -506,6 +508,7 @@ export class PuppeteerRenderer {
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
+      theme: quizData.theme,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -858,6 +861,7 @@ export class PuppeteerRenderer {
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
+      theme: quizData.theme,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -978,6 +982,7 @@ export class PuppeteerRenderer {
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
+      theme: quizData.theme,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -1088,6 +1093,7 @@ export class PuppeteerRenderer {
       explanationTTS: quizItem.explanationTTS || quizItem.explanation,
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
+      theme: quizData.theme,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,

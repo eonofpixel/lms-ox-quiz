@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { QuizSet, QuizItem } from '../../types/quiz';
+import type { QuizThemeId } from '../../types/theme';
 import { useQuizStore } from '../../hooks/useQuizStore';
 import { QuizEditDialog } from './QuizEditDialog';
 import { Button } from '../ui/button';
@@ -54,9 +55,10 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
     navigate('/render');
   };
 
-  const handleEditSave = async (name: string, item: QuizItem) => {
+  const handleEditSave = async (name: string, item: QuizItem, theme: QuizThemeId) => {
     await updateQuizSet(quizSet.id, {
       name,
+      theme,
       items: [item],
     });
     setEditDialogOpen(false);
@@ -171,6 +173,7 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
         onOpenChange={setEditDialogOpen}
         defaultItem={quizSet.items[0]}
         defaultName={quizSet.name}
+        defaultTheme={quizSet.theme}
         onSave={handleEditSave}
         mode="edit"
       />

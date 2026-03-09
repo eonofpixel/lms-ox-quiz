@@ -1,12 +1,16 @@
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
+import { getThemeColors } from '../types/theme';
+import type { QuizThemeId } from '../types/theme';
 
 interface IntroScreenProps {
   onStart: () => void;
   totalQuizzes: number;
+  themeId?: QuizThemeId;
 }
 
-export function IntroScreen({ onStart, totalQuizzes }: IntroScreenProps) {
+export function IntroScreen({ onStart, totalQuizzes, themeId }: IntroScreenProps) {
+  const themeColors = getThemeColors(themeId);
   useEffect(() => {
     const timer = setTimeout(() => {
       onStart();
@@ -28,7 +32,7 @@ export function IntroScreen({ onStart, totalQuizzes }: IntroScreenProps) {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.6, type: "spring" }}
-          className="inline-flex items-center gap-2 bg-orange-500 text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 border-orange-400"
+          className={`inline-flex items-center gap-2 ${themeColors.introBadgeBg} text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 ${themeColors.introBadgeBorder}`}
         >
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
           <span className="text-sm md:text-base font-bold tracking-wider">SAFETY EDUCATION</span>
@@ -62,7 +66,7 @@ export function IntroScreen({ onStart, totalQuizzes }: IntroScreenProps) {
         </motion.div>
 
         {/* VS 뱃지 */}
-        <div className="text-4xl md:text-6xl font-black text-orange-900/10 italic tracking-tighter">
+        <div className={`text-4xl md:text-6xl font-black ${themeColors.introVsColor} italic tracking-tighter`}>
           VS
         </div>
 
@@ -89,8 +93,8 @@ export function IntroScreen({ onStart, totalQuizzes }: IntroScreenProps) {
         transition={{ delay: 0.8, duration: 0.6 }}
         className="relative group z-10 mb-8 cursor-default"
       >
-        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur opacity-75 animate-pulse" />
-        <div className="relative px-12 py-6 bg-orange-600 rounded-full leading-none flex items-center gap-4 shadow-xl">
+        <div className={`absolute -inset-1 bg-gradient-to-r ${themeColors.introStartGlow} rounded-full blur opacity-75 animate-pulse`} />
+        <div className={`relative px-12 py-6 ${themeColors.introStartBg} rounded-full leading-none flex items-center gap-4 shadow-xl`}>
           <span className="text-xl md:text-2xl font-black text-white">
             잠시 후 퀴즈가 시작됩니다...
           </span>

@@ -7,6 +7,7 @@ import { Button } from '../ui/button';
 import { Plus, Video } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { QuizItem } from '../../types/quiz';
+import type { QuizThemeId } from '../../types/theme';
 
 // 기본 퀴즈 데이터
 const defaultQuizItem: QuizItem = {
@@ -31,8 +32,8 @@ export function QuizListPage() {
     loadQuizSets();
   }, [loadQuizSets]);
 
-  const handleCreateQuiz = async (name: string, item: QuizItem) => {
-    await addQuizSet(name, [item]);
+  const handleCreateQuiz = async (name: string, item: QuizItem, theme: QuizThemeId) => {
+    await addQuizSet(name, [item], undefined, theme);
     setCreateDialogOpen(false);
   };
 

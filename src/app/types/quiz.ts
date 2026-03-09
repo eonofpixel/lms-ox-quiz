@@ -2,6 +2,7 @@
 export interface ExplanationItem {
   content: string;
   tts?: string; // TTS 대본 (비워두면 content 사용)
+  singleLine?: boolean; // 1줄 고정 (자동 폰트 축소)
 }
 
 // Quiz Item - 개별 퀴즈 문제
@@ -23,6 +24,7 @@ export interface QuizSet {
   id: string;
   name: string;
   description?: string;
+  theme?: import('./theme').QuizThemeId; // 퀴즈 테마 (기본: 'classic')
   items: QuizItem[];
   createdAt: Date;
   updatedAt: Date;

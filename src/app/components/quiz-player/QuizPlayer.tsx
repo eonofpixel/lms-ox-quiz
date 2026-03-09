@@ -5,6 +5,8 @@ import { QuizScreen } from '../QuizScreen';
 import { IntroScreen } from '../IntroScreen';
 import { useQuizStore } from '../../hooks/useQuizStore';
 import type { QuizItem as QuizItemType } from '../../types/quiz';
+import { getThemeColors } from '../../types/theme';
+import type { QuizThemeId } from '../../types/theme';
 import { Button } from '../ui/button';
 import { ArrowLeft } from 'lucide-react';
 
@@ -57,6 +59,7 @@ export function QuizPlayer() {
 
   // Find the current quiz set
   const quizSet = quizSets.find(qs => qs.id === quizSetId);
+  const themeColors = getThemeColors(quizSet?.theme as QuizThemeId | undefined);
 
   // Handle resize
   useEffect(() => {
@@ -107,7 +110,7 @@ export function QuizPlayer() {
 
   if (!quizSet) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-100">
+      <div className="w-screen h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
           <p className="text-xl text-gray-600 mb-4">퀴즈를 찾을 수 없습니다.</p>
           <Button onClick={() => navigate('/')} variant="outline">
@@ -136,20 +139,20 @@ export function QuizPlayer() {
       {/* Scale Container */}
       <div
         ref={containerRef}
-        className="relative shadow-[0_0_100px_rgba(255,165,0,0.1)] overflow-hidden"
+        className={`relative ${themeColors.playerShadow} overflow-hidden`}
         style={{
           width: 1280,
           height: 720,
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
-          backgroundColor: '#fff7ed',
+          backgroundColor: themeColors.backgroundFallback,
         }}
       >
         {/* Background */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 bg-gradient-to-br from-orange-100 via-amber-100 to-orange-50">
-          <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-orange-300/30 rounded-full blur-[100px]" />
-          <div className="absolute top-1/2 right-0 w-[500px] h-[500px] bg-amber-300/30 rounded-full blur-[100px]" />
-          <div className="absolute -bottom-40 left-1/3 w-[700px] h-[700px] bg-orange-200/40 rounded-full blur-[120px]" />
+        <div className={`absolute inset-0 overflow-hidden pointer-events-none z-0 bg-gradient-to-br ${themeColors.backgroundGradient}`}>
+          <div className={`absolute -top-20 -left-20 w-[600px] h-[600px] ${themeColors.backgroundBlobA} rounded-full blur-[100px]`} />
+          <div className={`absolute top-1/2 right-0 w-[500px] h-[500px] ${themeColors.backgroundBlobB} rounded-full blur-[100px]`} />
+          <div className={`absolute -bottom-40 left-1/3 w-[700px] h-[700px] ${themeColors.backgroundBlobC} rounded-full blur-[120px]`} />
           <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px]" />
         </div>
 
@@ -169,7 +172,7 @@ export function QuizPlayer() {
                 transition={{ duration: 0.6, ease: 'easeOut' }}
                 className="w-full h-full"
               >
-                <IntroScreen onStart={handleStart} totalQuizzes={quizSet.items.length} />
+                <IntroScreen onStart={handleStart} totalQuizzes={quizSet.items.length} themeId={quizSet?.theme as QuizThemeId | undefined} />
               </motion.div>
             ) : (
               <motion.div
@@ -191,6 +194,7 @@ export function QuizPlayer() {
                   onHome={handleHome}
                   quizNumber={currentIndex + 1}
                   totalQuizzes={quizSet.items.length}
+                  themeId={quizSet?.theme as QuizThemeId | undefined}
                 />
               </motion.div>
             )}

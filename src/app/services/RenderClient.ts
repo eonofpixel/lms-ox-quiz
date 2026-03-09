@@ -83,6 +83,7 @@ class RenderClient {
         quizData: {
           id: quizSet.id,
           name: quizSet.name,
+          theme: quizSet.theme,
           items: quizSet.items,
         },
         settings: {

@@ -84,6 +84,8 @@ class RenderClient {
           id: quizSet.id,
           name: quizSet.name,
           theme: quizSet.theme,
+          introBadgeText: quizSet.introBadgeText,
+          introSubtitle: quizSet.introSubtitle,
           items: quizSet.items,
         },
         settings: {
@@ -152,6 +154,33 @@ class RenderClient {
 
   onJobsUpdate(callback: (jobs: RenderJobUpdate[]) => void): void {
     this.globalCallback = callback;
+  }
+
+  async getSettings(): Promise<{ outputDir: string }> {
+    const response = await fetch(`${RENDER_SERVER_URL}/api/settings`);
+    if (!response.ok) throw new Error('Failed to get settings');
+    return response.json();
+  }
+
+  async browseFolder(): Promise<string | null> {
+    const response = await fetch(`${RENDER_SERVER_URL}/api/settings/browse`, {
+      method: 'POST',
+    });
+    if (!response.ok) return null;
+    const { selectedPath } = await response.json();
+    return selectedPath || null;
+  }
+
+  async updateSettings(settings: { outputDir: string }): Promise<void> {
+    const response = await fetch(`${RENDER_SERVER_URL}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update settings');
+    }
   }
 }
 

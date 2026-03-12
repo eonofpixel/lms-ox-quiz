@@ -16,7 +16,10 @@ import {
   RefreshCw,
   Server,
   ServerOff,
+  Settings,
+  FolderOpen,
 } from 'lucide-react';
+import { Input } from '../ui/input';
 
 const statusLabels: Record<RenderJobUpdate['status'], string> = {
   pending: '대기 중',
@@ -34,6 +37,11 @@ export function RenderQueuePage() {
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set());
   const [serverConnected, setServerConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [outputDir, setOutputDir] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState(false);
 
   // Auto-hide completed/failed jobs after 5 seconds
   useEffect(() => {
@@ -73,6 +81,7 @@ export function RenderQueuePage() {
         renderClient.onJobsUpdate((updatedJobs) => {
           setJobs(updatedJobs);
         });
+        loadSettings();
       } else {
         setServerConnected(false);
       }
@@ -80,6 +89,47 @@ export function RenderQueuePage() {
       setServerConnected(false);
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const settings = await renderClient.getSettings();
+      setOutputDir(settings.outputDir);
+    } catch {
+      // ignore if server not connected
+    }
+  };
+
+  const [isBrowsing, setIsBrowsing] = useState(false);
+
+  const handleBrowseFolder = async () => {
+    setIsBrowsing(true);
+    try {
+      const selected = await renderClient.browseFolder();
+      if (selected) {
+        setOutputDir(selected);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsBrowsing(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!outputDir.trim()) return;
+    setIsSavingSettings(true);
+    setSettingsError(null);
+    setSettingsSuccess(false);
+    try {
+      await renderClient.updateSettings({ outputDir: outputDir.trim() });
+      setSettingsSuccess(true);
+      setTimeout(() => setSettingsSuccess(false), 3000);
+    } catch (err) {
+      setSettingsError((err as Error).message);
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -149,6 +199,17 @@ export function RenderQueuePage() {
             <h1 className="text-2xl font-bold text-gray-800">비디오 렌더링</h1>
             <p className="text-gray-600">4K 60fps H.264 MP4로 렌더링합니다.</p>
           </div>
+          {serverConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowSettings(!showSettings); if (!showSettings) loadSettings(); }}
+              className={showSettings ? 'bg-orange-50 border-orange-300' : ''}
+            >
+              <Settings className="w-4 h-4 mr-1" />
+              설정
+            </Button>
+          )}
         </div>
 
         {/* Server Status */}
@@ -188,8 +249,55 @@ export function RenderQueuePage() {
           </CardContent>
         </Card>
 
-        {/* Available Quizzes to Render */}
-        {serverConnected && quizSets.length > 0 && (
+        {/* Settings Panel */}
+        {showSettings && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FolderOpen className="w-5 h-5" />
+                렌더링 출력 설정
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  value={outputDir}
+                  onChange={(e) => setOutputDir(e.target.value)}
+                  placeholder="C:\Users\...\QuizVideoOutput"
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleBrowseFolder}
+                  disabled={isBrowsing}
+                  className="shrink-0"
+                >
+                  <FolderOpen className="w-4 h-4 mr-1" />
+                  {isBrowsing ? '선택 중...' : '찾아보기'}
+                </Button>
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSavingSettings || !outputDir.trim()}
+                  className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+                >
+                  {isSavingSettings ? '저장 중...' : '저장'}
+                </Button>
+              </div>
+              {settingsError && (
+                <p className="text-sm text-red-600">{settingsError}</p>
+              )}
+              {settingsSuccess && (
+                <p className="text-sm text-green-600">출력 경로가 변경되었습니다.</p>
+              )}
+              <p className="text-xs text-gray-500">
+                렌더링된 비디오가 저장되는 폴더를 지정합니다. 절대 경로를 입력해주세요.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Available Quizzes to Render (exclude archived) */}
+        {serverConnected && quizSets.filter(q => !q.folderId).length > 0 && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="text-lg">렌더링할 퀴즈 선택</CardTitle>
@@ -197,7 +305,7 @@ export function RenderQueuePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-3">
-                {quizSets.map((quizSet) => (
+                {quizSets.filter(q => !q.folderId).map((quizSet) => (
                   <div key={quizSet.id} className="flex gap-2">
                     <Button
                       variant="outline"

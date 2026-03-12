@@ -24,7 +24,9 @@ interface QuizEditDialogProps {
   defaultItem: QuizItem;
   defaultName?: string;
   defaultTheme?: QuizThemeId;
-  onSave: (name: string, item: QuizItem, theme: QuizThemeId) => void;
+  defaultIntroBadgeText?: string;
+  defaultIntroSubtitle?: string;
+  onSave: (name: string, item: QuizItem, theme: QuizThemeId, introBadgeText?: string, introSubtitle?: string) => void;
   mode: 'create' | 'edit';
 }
 
@@ -34,6 +36,8 @@ export function QuizEditDialog({
   defaultItem,
   defaultName = '',
   defaultTheme,
+  defaultIntroBadgeText,
+  defaultIntroSubtitle,
   onSave,
   mode,
 }: QuizEditDialogProps) {
@@ -41,12 +45,16 @@ export function QuizEditDialog({
   const [editingItem, setEditingItem] = useState<QuizItem>(defaultItem);
   const [explanations, setExplanations] = useState<ExplanationItem[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<QuizThemeId>(defaultTheme || 'classic');
+  const [introBadgeText, setIntroBadgeText] = useState(defaultIntroBadgeText || '');
+  const [introSubtitle, setIntroSubtitle] = useState(defaultIntroSubtitle || '');
 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setQuizName(defaultName || `퀴즈 ${new Date().toLocaleDateString('ko-KR')}`);
       setSelectedTheme(defaultTheme || 'classic');
+      setIntroBadgeText(defaultIntroBadgeText || '');
+      setIntroSubtitle(defaultIntroSubtitle || '');
       const itemWithId = { ...defaultItem, id: defaultItem.id || uuidv4() };
       setEditingItem(itemWithId);
 
@@ -61,7 +69,7 @@ export function QuizEditDialog({
         }]);
       }
     }
-  }, [open, defaultItem, defaultName, defaultTheme]);
+  }, [open, defaultItem, defaultName, defaultTheme, defaultIntroBadgeText, defaultIntroSubtitle]);
 
   const handleSave = () => {
     if (!quizName.trim()) return;
@@ -75,7 +83,7 @@ export function QuizEditDialog({
       explanation: explanations[0]?.content || '',
       explanationTTS: explanations[0]?.tts || '',
     };
-    onSave(quizName.trim(), itemToSave, selectedTheme);
+    onSave(quizName.trim(), itemToSave, selectedTheme, introBadgeText.trim() || undefined, introSubtitle.trim() || undefined);
   };
 
   // 해설 추가
@@ -130,7 +138,14 @@ export function QuizEditDialog({
                 <button
                   key={theme.id}
                   type="button"
-                  onClick={() => setSelectedTheme(theme.id)}
+                  onClick={() => {
+                    const prevDefault = selectedTheme === 'blue' ? '법정 의무교육 평가' : '산업안전보건 교육 평가';
+                    setSelectedTheme(theme.id);
+                    // 사용자가 직접 수정하지 않았으면 테마별 기본 부제목으로 변경
+                    if (!introSubtitle || introSubtitle === prevDefault) {
+                      setIntroSubtitle(theme.id === 'blue' ? '법정 의무교육 평가' : '');
+                    }
+                  }}
                   className={`flex-1 rounded-xl border-2 p-3 transition-all ${
                     selectedTheme === theme.id
                       ? 'border-slate-900 shadow-lg scale-105'
@@ -149,6 +164,31 @@ export function QuizEditDialog({
                   <div className="text-sm font-bold text-slate-700">{theme.name}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* 인트로 화면 설정 */}
+          <div className="space-y-2">
+            <Label className="text-base font-bold text-slate-800">인트로 화면 문구</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm text-slate-500">뱃지 텍스트</Label>
+                <Input
+                  value={introBadgeText}
+                  onChange={(e) => setIntroBadgeText(e.target.value)}
+                  placeholder="SAFETY EDUCATION"
+                  className="h-10 text-sm border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-xl"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm text-slate-500">부제목</Label>
+                <Input
+                  value={introSubtitle}
+                  onChange={(e) => setIntroSubtitle(e.target.value)}
+                  placeholder={selectedTheme === 'blue' ? '법정 의무교육 평가' : '산업안전보건 교육 평가'}
+                  className="h-10 text-sm border-slate-200 focus:border-orange-400 focus:ring-orange-400/20 rounded-xl"
+                />
+              </div>
             </div>
           </div>
 

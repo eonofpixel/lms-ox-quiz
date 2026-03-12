@@ -172,7 +172,7 @@ export function QuizPlayer() {
                 transition={{ duration: 0.6, ease: 'easeOut' }}
                 className="w-full h-full"
               >
-                <IntroScreen onStart={handleStart} totalQuizzes={quizSet.items.length} themeId={quizSet?.theme as QuizThemeId | undefined} />
+                <IntroScreen onStart={handleStart} totalQuizzes={quizSet.items.length} themeId={quizSet?.theme as QuizThemeId | undefined} introBadgeText={quizSet?.introBadgeText} introSubtitle={quizSet?.introSubtitle} />
               </motion.div>
             ) : (
               <motion.div

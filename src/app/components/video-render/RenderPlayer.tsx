@@ -28,6 +28,8 @@ interface QuizData {
   singleLineQuestion?: boolean; // 질문 1줄 고정
   timeline?: TimelineEvent[];
   theme?: QuizThemeId;
+  introBadgeText?: string;
+  introSubtitle?: string;
 }
 
 // Determine current phase and state based on time
@@ -127,6 +129,8 @@ export function RenderPlayer() {
           singleLineQuestion: parsed.singleLineQuestion === true ? true : parsed.singleLineQuestion === false ? false : undefined, // 1줄 고정 (undefined = 자동 감지)
           timeline: parsed.timeline,
           theme: parsed.theme || undefined,
+          introBadgeText: parsed.introBadgeText || undefined,
+          introSubtitle: parsed.introSubtitle || undefined,
         });
 
         if (parsed.timeline && Array.isArray(parsed.timeline)) {
@@ -211,7 +215,7 @@ export function RenderPlayer() {
           className="relative"
         >
           {renderState.phase === 'intro' ? (
-            <IntroScreenStatic themeId={quizData?.theme} />
+            <IntroScreenStatic themeId={quizData?.theme} introBadgeText={quizData?.introBadgeText} introSubtitle={quizData?.introSubtitle} />
           ) : renderState.phase === 'explanation' ? (
             <ExplanationScreenStatic
               question={quizData.question}
@@ -241,7 +245,7 @@ export function RenderPlayer() {
 }
 
 // Static Intro Screen - matches preview IntroScreen
-function IntroScreenStatic({ themeId }: { themeId?: QuizThemeId }) {
+function IntroScreenStatic({ themeId, introBadgeText, introSubtitle }: { themeId?: QuizThemeId; introBadgeText?: string; introSubtitle?: string }) {
   const themeColors = getThemeColors(themeId);
   return (
     <div className="w-full h-full p-8 md:p-12 flex flex-col items-center justify-between relative">
@@ -249,14 +253,14 @@ function IntroScreenStatic({ themeId }: { themeId?: QuizThemeId }) {
       <div className="text-center relative z-10 pt-8 flex flex-col items-center">
         <div className={`inline-flex items-center gap-2 ${themeColors.introBadgeBg} text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 ${themeColors.introBadgeBorder}`}>
           <span className="w-2 h-2 rounded-full bg-white" />
-          <span className="text-sm md:text-base font-bold tracking-wider">SAFETY EDUCATION</span>
+          <span className="text-sm md:text-base font-bold tracking-wider">{introBadgeText || 'SAFETY EDUCATION'}</span>
         </div>
 
         <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-slate-900 mb-2 tracking-tight drop-shadow-sm">
           O·X QUIZ
         </h1>
         <p className="text-lg md:text-2xl text-slate-700 font-bold tracking-wide">
-          산업안전보건 교육 평가
+          {introSubtitle || (themeId === 'blue' ? '법정 의무교육 평가' : '산업안전보건 교육 평가')}
         </p>
       </div>
 
@@ -308,15 +312,15 @@ function getAdaptiveFontClass(text: string, baseClass: string, smallClass: strin
 }
 
 // Formula-based single-line font size for static renderer (base: 1280x720)
-// Card content width ≈ 1280 - 160 (outer padding p-10) - 64 (card padding p-8) - 60 (Q. prefix) ≈ 996px
-// Korean chars ≈ 0.55em wide at given font size
+// Card content width ≈ 1280 - 80(p-10) - 64(card p-8) = 1136, but max-w-5xl caps → ~900px usable
 function getSingleLineFontSizeStatic(text: string): number {
-  const availableWidth = 996; // px at base 1280px width
-  const charWidthRatio = 0.6; // em ratio per character (Korean avg)
-  const prefixWidth = 42; // approx px for "Q. " at given font
+  const availableWidth = 860; // 보수적 (font-black 한글 고려)
+  const koreanChars = text.replace(/[a-zA-Z0-9\s\(\)\.\-\/:,]/g, '').length;
+  const otherChars = text.length - koreanChars;
+  const prefixWidth = 42; // "Q. " prefix
   let fontSize = 30;
   while (fontSize > 10) {
-    const estimatedTextWidth = (text.length * charWidthRatio * fontSize) + prefixWidth;
+    const estimatedTextWidth = (koreanChars * 1.0 + otherChars * 0.6) * fontSize + prefixWidth;
     if (estimatedTextWidth <= availableWidth) break;
     fontSize -= 1;
   }
@@ -326,14 +330,14 @@ function getSingleLineFontSizeStatic(text: string): number {
 // 해설용 1줄 고정 폰트 크기 계산 (base: 1280x720)
 // 해설 영역: 전체 max-w-4xl 내부, p-8 + p-6 패딩 제외 → 약 780px
 function getExplanationSingleLineFontSize(text: string): number {
-  const availableWidth = 780;
-  // 한글 0.6, 영문/숫자/괄호 0.38 (font-bold 기준)
+  const availableWidth = 720; // max-w-4xl(896) - p-8(64) - p-6(48) - safety margin
+  // 한글 1.0, 영문/숫자/괄호 0.6 (font-bold 기준, 보수적)
   const koreanChars = text.replace(/[a-zA-Z0-9\s\(\)\.\-\/:,]/g, '').length;
   const otherChars = text.length - koreanChars;
   const estimateWidth = (fontSize: number) =>
-    (koreanChars * 0.6 + otherChars * 0.38) * fontSize;
+    (koreanChars * 1.0 + otherChars * 0.6) * fontSize;
   let fontSize = 24;
-  while (fontSize > 14) {
+  while (fontSize > 10) {
     if (estimateWidth(fontSize) <= availableWidth) break;
     fontSize -= 1;
   }
@@ -357,8 +361,7 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
   const themeColors = getThemeColors(themeId);
 
   // 질문 1줄 고정 자동 감지
-  const effectiveSingleLine = singleLineQuestion === true ||
-    (singleLineQuestion === undefined && getSingleLineFontSizeStatic(question) >= 20);
+  const effectiveSingleLine = singleLineQuestion === true;
 
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col relative text-slate-900">
@@ -395,6 +398,7 @@ function QuizScreenStatic({ question, timerValue, timerProgress, timerDurationSe
               style={{
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 fontSize: `${getSingleLineFontSizeStatic(question)}px`,
                 lineHeight: 1.3,
               }}
@@ -504,6 +508,7 @@ function ExplanationScreenStatic({ question, answer, explanation, explanations, 
                   style={{
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                     fontSize: `${getExplanationSingleLineFontSize(currentExplanation)}px`,
                     lineHeight: 1.4,
                   }}

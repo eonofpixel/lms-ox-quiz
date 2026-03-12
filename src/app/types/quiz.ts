@@ -19,12 +19,22 @@ export interface QuizItem {
   explanationTTS?: string;
 }
 
+// Quiz Folder - 퀴즈 보관함
+export interface QuizFolder {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+
 // Quiz Set - 퀴즈 세트 (여러 문제 묶음)
 export interface QuizSet {
   id: string;
   name: string;
   description?: string;
   theme?: import('./theme').QuizThemeId; // 퀴즈 테마 (기본: 'classic')
+  introBadgeText?: string;    // 인트로 뱃지 텍스트 (기본: 'SAFETY EDUCATION')
+  introSubtitle?: string;     // 인트로 부제목 (기본: '산업안전보건 교육 평가')
+  folderId?: string;          // 보관함 ID (없으면 루트)
   items: QuizItem[];
   createdAt: Date;
   updatedAt: Date;

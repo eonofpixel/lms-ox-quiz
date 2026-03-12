@@ -7,9 +7,11 @@ interface IntroScreenProps {
   onStart: () => void;
   totalQuizzes: number;
   themeId?: QuizThemeId;
+  introBadgeText?: string;
+  introSubtitle?: string;
 }
 
-export function IntroScreen({ onStart, totalQuizzes, themeId }: IntroScreenProps) {
+export function IntroScreen({ onStart, totalQuizzes, themeId, introBadgeText, introSubtitle }: IntroScreenProps) {
   const themeColors = getThemeColors(themeId);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -35,14 +37,14 @@ export function IntroScreen({ onStart, totalQuizzes, themeId }: IntroScreenProps
           className={`inline-flex items-center gap-2 ${themeColors.introBadgeBg} text-white px-5 py-2 rounded-full mb-6 shadow-lg border-2 ${themeColors.introBadgeBorder}`}
         >
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-          <span className="text-sm md:text-base font-bold tracking-wider">SAFETY EDUCATION</span>
+          <span className="text-sm md:text-base font-bold tracking-wider">{introBadgeText || 'SAFETY EDUCATION'}</span>
         </motion.div>
         
         <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-slate-900 mb-2 tracking-tight drop-shadow-sm">
           O·X QUIZ
         </h1>
         <p className="text-lg md:text-2xl text-slate-700 font-bold tracking-wide">
-          산업안전보건 교육 평가
+          {introSubtitle || (themeId === 'blue' ? '법정 의무교육 평가' : '산업안전보건 교육 평가')}
         </p>
       </motion.div>
 

@@ -23,13 +23,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
-import { Play, Video, MoreVertical, Trash2, Edit, Eye } from 'lucide-react';
+import { Play, Video, MoreVertical, Trash2, Edit, Eye, Download } from 'lucide-react';
+import { saveAs } from 'file-saver';
 
 interface QuizSetCardProps {
   quizSet: QuizSet;
+  selectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
 }
 
-export function QuizSetCard({ quizSet }: QuizSetCardProps) {
+export function QuizSetCard({ quizSet, selectionMode, isSelected, onToggleSelect }: QuizSetCardProps) {
   const navigate = useNavigate();
   const { deleteQuizSet, updateQuizSet, createRenderJob } = useQuizStore();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -55,11 +59,25 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
     navigate('/render');
   };
 
-  const handleEditSave = async (name: string, item: QuizItem, theme: QuizThemeId) => {
+  const handleExport = () => {
+    const exportData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      quizSet: quizSet,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const safeName = quizSet.name.replace(/[^a-zA-Z0-9가-힣]/g, '_');
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    saveAs(blob, `${safeName}_${date}.json`);
+  };
+
+  const handleEditSave = async (name: string, item: QuizItem, theme: QuizThemeId, introBadgeText?: string, introSubtitle?: string) => {
     await updateQuizSet(quizSet.id, {
       name,
       theme,
       items: [item],
+      introBadgeText,
+      introSubtitle,
     });
     setEditDialogOpen(false);
   };
@@ -74,9 +92,23 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
 
   return (
     <>
-      <Card className="bg-white hover:shadow-xl transition-shadow duration-300">
+      <Card
+        className={`bg-white hover:shadow-xl transition-shadow duration-300 ${selectionMode ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-orange-500 bg-orange-50/50' : ''}`}
+        onClick={selectionMode ? () => onToggleSelect(quizSet.id) : undefined}
+      >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
+            {selectionMode && (
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mr-2 shrink-0 transition-colors mt-0.5 ${
+                isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300 bg-white'
+              }`}>
+                {isSelected && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+            )}
             <div className="flex-1">
               <CardTitle className="text-lg font-semibold text-gray-800 line-clamp-1">
                 {quizSet.name}
@@ -99,6 +131,10 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
                 <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
                   <Edit className="mr-2 h-4 w-4" />
                   편집
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExport}>
+                  <Download className="mr-2 h-4 w-4" />
+                  내보내기
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -174,6 +210,8 @@ export function QuizSetCard({ quizSet }: QuizSetCardProps) {
         defaultItem={quizSet.items[0]}
         defaultName={quizSet.name}
         defaultTheme={quizSet.theme}
+        defaultIntroBadgeText={quizSet.introBadgeText}
+        defaultIntroSubtitle={quizSet.introSubtitle}
         onSave={handleEditSave}
         mode="edit"
       />

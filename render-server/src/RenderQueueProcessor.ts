@@ -37,6 +37,7 @@ export class RenderQueueProcessor {
   private ttsService: TTSService;
   private soundEffectsGenerator: SoundEffectsGenerator;
   private outputDir: string;
+  private configPath: string;
   private soundEffectsDir: string;
   private soundEffects: SoundEffects | null = null;
 
@@ -47,10 +48,61 @@ export class RenderQueueProcessor {
     this.assembler = new FFmpegAssembler();
     this.ttsService = new TTSService();
     this.outputDir = path.join(os.homedir(), 'QuizVideoOutput');
+    this.configPath = path.join(os.homedir(), 'QuizVideoOutput', 'server-config.json');
+    this.loadConfig();
     this.soundEffectsDir = path.join(this.outputDir, 'sound_effects');
     this.soundEffectsGenerator = new SoundEffectsGenerator(this.soundEffectsDir);
 
     fs.ensureDirSync(this.outputDir);
+  }
+
+  private loadConfig(): void {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const config = fs.readJsonSync(this.configPath);
+        if (config.outputDir && typeof config.outputDir === 'string') {
+          this.outputDir = config.outputDir;
+          fs.ensureDirSync(this.outputDir);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load config, using default output dir');
+    }
+  }
+
+  private saveConfig(): void {
+    try {
+      const defaultConfigDir = path.join(os.homedir(), 'QuizVideoOutput');
+      fs.ensureDirSync(defaultConfigDir);
+      fs.writeJsonSync(path.join(defaultConfigDir, 'server-config.json'), {
+        outputDir: this.outputDir,
+      }, { spaces: 2 });
+    } catch (e) {
+      console.warn('Failed to save config');
+    }
+  }
+
+  getOutputDir(): string {
+    return this.outputDir;
+  }
+
+  async setOutputDir(newDir: string): Promise<void> {
+    if (!path.isAbsolute(newDir)) {
+      throw new Error('출력 경로는 절대 경로여야 합니다.');
+    }
+
+    await fs.ensureDir(newDir);
+
+    const testFile = path.join(newDir, '.write-test');
+    try {
+      await fs.writeFile(testFile, 'test');
+      await fs.remove(testFile);
+    } catch {
+      throw new Error('출력 경로에 쓰기 권한이 없습니다.');
+    }
+
+    this.outputDir = newDir;
+    this.saveConfig();
   }
 
   async initialize(): Promise<void> {

@@ -2,6 +2,10 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
+import { execSync } from 'child_process';
+import path from 'path';
+import os from 'os';
+import fsExtra from 'fs-extra';
 import { RenderQueueProcessor } from './RenderQueueProcessor.js';
 
 const PORT = process.env.PORT || 3001;
@@ -75,6 +79,62 @@ app.delete('/api/render/:jobId', (req, res) => {
   res.json({ message: 'Job cancelled' });
 });
 
+// Settings API
+app.get('/api/settings', (req, res) => {
+  res.json({
+    outputDir: renderQueue.getOutputDir(),
+  });
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const { outputDir } = req.body;
+    if (!outputDir) {
+      return res.status(400).json({ error: 'outputDir is required' });
+    }
+    await renderQueue.setOutputDir(outputDir);
+    res.json({ message: 'Settings updated', outputDir: renderQueue.getOutputDir() });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
+// Browse for folder (native OS dialog via temp .ps1 file)
+app.post('/api/settings/browse', async (req, res) => {
+  const scriptPath = path.join(os.tmpdir(), `browse-folder-${Date.now()}.ps1`);
+  try {
+    const currentDir = renderQueue.getOutputDir().replace(/\//g, '\\');
+    const psScript = [
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '[System.Windows.Forms.Application]::EnableVisualStyles()',
+      '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
+      `$dialog.Description = "렌더링 출력 폴더 선택"`,
+      `$dialog.SelectedPath = "${currentDir}"`,
+      '$dialog.ShowNewFolderButton = $true',
+      `if ($dialog.ShowDialog() -eq 'OK') { Write-Output $dialog.SelectedPath }`,
+    ].join('\n');
+
+    await fsExtra.writeFile(scriptPath, psScript, 'utf-8');
+
+    const result = execSync(`powershell -STA -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+      encoding: 'utf-8',
+      timeout: 120000,
+      windowsHide: false,
+    }).trim();
+
+    if (result) {
+      res.json({ selectedPath: result });
+    } else {
+      res.json({ selectedPath: null });
+    }
+  } catch (err) {
+    console.error('Browse folder error:', err);
+    res.json({ selectedPath: null });
+  } finally {
+    fsExtra.remove(scriptPath).catch(() => {});
+  }
+});
+
 // WebSocket events
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -115,6 +175,8 @@ async function startServer() {
 ║   - POST /api/render        Start a new render job           ║
 ║   - GET  /api/render/:id    Get job status                   ║
 ║   - DELETE /api/render/:id  Cancel a job                     ║
+║   - GET  /api/settings     Get settings                      ║
+║   - PUT  /api/settings     Update settings                   ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
       `);

@@ -40,36 +40,22 @@ interface QuizScreenProps {
   themeId?: QuizThemeId;
 }
 
-// 해설 1줄 고정 폰트 크기 공식 추정 (DOM 측정 전 초기값/폴백)
+// 해설 1줄 고정 폰트 크기 공식 추정
+// 한글 bold: ~1.0em, 영문/숫자: ~0.6em, 가용폭에 여유 10% 포함
 function estimateExplanationFontSize(text: string): number {
-  const availableWidth = 780;
+  const availableWidth = 720; // max-w-4xl(896) - p-8(64) - p-6(48) - safety margin
   const koreanChars = text.replace(/[a-zA-Z0-9\s\(\)\.\-\/:,]/g, '').length;
   const otherChars = text.length - koreanChars;
   const estimateWidth = (fontSize: number) =>
-    (koreanChars * 0.6 + otherChars * 0.38) * fontSize;
+    (koreanChars * 1.0 + otherChars * 0.6) * fontSize;
   let fontSize = 24;
-  while (fontSize > 14) {
+  while (fontSize > 10) {
     if (estimateWidth(fontSize) <= availableWidth) break;
     fontSize -= 1;
   }
   return fontSize;
 }
 
-// 질문 1줄 고정 자동 감지 (길이 기반)
-// 텍스트가 적절한 폰트 크기(≥20px)로 1줄에 들어가면 자동 활성화
-function shouldAutoSingleLineQuestion(text: string): boolean {
-  const availableWidth = 996; // 1280px 기준 카드 내부 가용 너비
-  const charWidthRatio = 0.6; // 한글 기준 em 비율
-  const prefixWidth = 42; // "Q. " 접두사
-  const minAutoFont = 20;
-  let fontSize = 30;
-  while (fontSize >= minAutoFont) {
-    const estimated = (text.length * charWidthRatio * fontSize) + prefixWidth;
-    if (estimated <= availableWidth) return true;
-    fontSize -= 1;
-  }
-  return false;
-}
 
 export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNumber, totalQuizzes, isRenderMode = false, renderTiming, themeId }: QuizScreenProps) {
   const themeColors = getThemeColors(themeId);
@@ -348,9 +334,8 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
 
   const isCorrect = selectedAnswer === quiz.answer;
 
-  // 질문 1줄 고정 자동 감지: undefined = 길이 기반 자동, true = 강제 활성, false = 강제 비활성
-  const effectiveSingleLineQuestion = quiz.singleLineQuestion === true ||
-    (quiz.singleLineQuestion === undefined && shouldAutoSingleLineQuestion(quiz.question));
+  // 질문 1줄 고정: true = 강제 활성, 그 외 = 비활성
+  const effectiveSingleLineQuestion = quiz.singleLineQuestion === true;
 
   // 1줄 고정 자동 폰트 크기 계산
   const questionContainerRef = useRef<HTMLDivElement>(null);
@@ -379,31 +364,6 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
     setSingleLineFontSize(fontSize);
   }, [quiz.question, effectiveSingleLineQuestion]);
 
-  // 해설 1줄 고정 자동 폰트 크기 계산
-  const explanationContainerRef = useRef<HTMLDivElement>(null);
-  const explanationTextRef = useRef<HTMLParagraphElement>(null);
-  const [explanationFontSize, setExplanationFontSize] = useState<number | null>(null);
-
-  useLayoutEffect(() => {
-    if (!currentExplanation?.singleLine) {
-      setExplanationFontSize(null);
-      return;
-    }
-    const container = explanationContainerRef.current;
-    const el = explanationTextRef.current;
-    if (!container || !el) return;
-
-    el.style.fontSize = '24px';
-    el.style.whiteSpace = 'nowrap';
-
-    const availableWidth = container.clientWidth - 48; // padding p-6
-    let fontSize = 24;
-    while (el.scrollWidth > availableWidth && fontSize > 14) {
-      fontSize -= 1;
-      el.style.fontSize = `${fontSize}px`;
-    }
-    setExplanationFontSize(fontSize);
-  }, [currentExplanation?.content, currentExplanation?.singleLine, currentExplanationIndex, showAnswer]);
 
   return (
     <div className="w-full h-full p-6 md:p-10 flex flex-col relative text-slate-900">
@@ -584,7 +544,7 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentExplanationIndex}
-                      ref={explanationContainerRef}
+
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: isExplanationTransitioning ? 0.5 : 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -593,14 +553,12 @@ export function QuizScreen({ quiz, onRestart, onHome, onExplanationShown, quizNu
                     >
                       {currentExplanation.singleLine ? (
                         <p
-                          ref={explanationTextRef}
                           className="text-slate-900 font-bold leading-relaxed overflow-hidden"
                           style={{
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
-                            fontSize: explanationFontSize
-                              ? `${explanationFontSize}px`
-                              : `${estimateExplanationFontSize(currentExplanation.content)}px`,
+                            textOverflow: 'ellipsis',
+                            fontSize: `${estimateExplanationFontSize(currentExplanation.content)}px`,
                             lineHeight: 1.4,
                           }}
                         >

@@ -1,10 +1,15 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import type { QuizSet, TTSAudioData, RenderJob } from '../types/quiz';
+import type { QuizSet, QuizFolder, TTSAudioData, RenderJob } from '../types/quiz';
 
 interface QuizDBSchema extends DBSchema {
   quizSets: {
     key: string;
     value: QuizSet;
+    indexes: { 'by-name': string; 'by-date': Date };
+  };
+  quizFolders: {
+    key: string;
+    value: QuizFolder;
     indexes: { 'by-name': string; 'by-date': Date };
   };
   ttsAudio: {
@@ -20,7 +25,7 @@ interface QuizDBSchema extends DBSchema {
 }
 
 const DB_NAME = 'quiz-video-renderer';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance: IDBPDatabase<QuizDBSchema> | null = null;
 
@@ -34,6 +39,13 @@ export async function getDB(): Promise<IDBPDatabase<QuizDBSchema>> {
         const quizStore = db.createObjectStore('quizSets', { keyPath: 'id' });
         quizStore.createIndex('by-name', 'name');
         quizStore.createIndex('by-date', 'createdAt');
+      }
+
+      // Quiz Folders store (NEW in v2)
+      if (!db.objectStoreNames.contains('quizFolders')) {
+        const folderStore = db.createObjectStore('quizFolders', { keyPath: 'id' });
+        folderStore.createIndex('by-name', 'name');
+        folderStore.createIndex('by-date', 'createdAt');
       }
 
       // TTS Audio store
@@ -105,6 +117,32 @@ export async function getAllTTSAudioForQuizSet(quizSetId: string): Promise<TTSAu
 export async function deleteTTSAudio(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('ttsAudio', id);
+}
+
+// Quiz Folders CRUD
+export async function getAllQuizFolders(): Promise<QuizFolder[]> {
+  const db = await getDB();
+  const folders = await db.getAll('quizFolders');
+  return folders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function saveQuizFolder(folder: QuizFolder): Promise<void> {
+  const db = await getDB();
+  await db.put('quizFolders', folder);
+}
+
+export async function deleteQuizFolder(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('quizFolders', id);
+
+  // Move all quiz sets in this folder back to root
+  const allSets = await db.getAll('quizSets');
+  for (const set of allSets) {
+    if (set.folderId === id) {
+      set.folderId = undefined;
+      await db.put('quizSets', set);
+    }
+  }
 }
 
 // Render Jobs CRUD

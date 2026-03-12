@@ -22,6 +22,8 @@ export interface QuizData {
   id: string;
   name: string;
   theme?: string;
+  introBadgeText?: string;
+  introSubtitle?: string;
   items: Array<{
     id: string;
     question: string;
@@ -253,6 +255,8 @@ export class PuppeteerRenderer {
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
       theme: quizData.theme,
+      introBadgeText: quizData.introBadgeText,
+      introSubtitle: quizData.introSubtitle,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -509,6 +513,8 @@ export class PuppeteerRenderer {
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
       theme: quizData.theme,
+      introBadgeText: quizData.introBadgeText,
+      introSubtitle: quizData.introSubtitle,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -862,6 +868,8 @@ export class PuppeteerRenderer {
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
       theme: quizData.theme,
+      introBadgeText: quizData.introBadgeText,
+      introSubtitle: quizData.introSubtitle,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -983,6 +991,8 @@ export class PuppeteerRenderer {
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
       theme: quizData.theme,
+      introBadgeText: quizData.introBadgeText,
+      introSubtitle: quizData.introSubtitle,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
@@ -1094,6 +1104,8 @@ export class PuppeteerRenderer {
       explanations: quizItem.explanations,
       singleLineQuestion: quizItem.singleLineQuestion,
       theme: quizData.theme,
+      introBadgeText: quizData.introBadgeText,
+      introSubtitle: quizData.introSubtitle,
       timeline: audioTimeline.timeline.map(event => ({
         type: event.type,
         startMs: event.startMs,
